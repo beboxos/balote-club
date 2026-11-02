@@ -44,3 +44,4 @@ Deux clients Node exécutent les vrais `reseau.js`, `reconnexion.js`, `partie.js
 
 - Critère 5 sur de vrais iPhone et Android : à faire avec `tests/determinisme.html`.
 - Duel entre deux navigateurs pilotés à la main : le parcours a été couvert par un navigateur face à un client Node, pas par deux navigateurs.
+- **Tour de jeu non imposé par le serveur** : un membre peut journaliser un coup au prochain `seq` alors que c'est à l'adversaire de jouer. Les clients le rejettent (mauvais auteur), mais ce `seq` reste bloqué et la partie se fige. L'effet est le même qu'un abandon, et seul un membre de la partie peut le faire. Pour imposer le tour côté serveur, il faut connaître les distances, donc re-simuler la physique : c'est le rôle de l'Edge Function `valider_partie` prévue en v2.
