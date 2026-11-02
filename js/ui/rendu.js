@@ -102,6 +102,9 @@ export class Rendu {
     this.construire();
   }
 
+  // Après le chargement de l'atlas du décor.
+  rafraichirDecor() { if (this.cam) this.construire(); }
+
   // Décor statique : texture de la piste (selon le sol) projetée par la caméra.
   construire() {
     if (!this.texture) {

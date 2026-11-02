@@ -83,6 +83,12 @@ La référence de `tests/determinisme.html` change avec la nouvelle physique : v
 - **Réglages** : curseur de volume (40 % par défaut, coupé avec le bouton son) et choix « enchaînement automatique » (une piste dure 10 passages, ≈ 2 min) ou une piste fixe. La musique démarre au premier geste (politique d'autoplay).
 - Niveaux égalisés piste par piste (RMS ≈ 0,06 à 100 %, mesuré à l'analyseur dans Chrome) avec `vol` ; non écoutées par moi : le rendu musical (goût, mixage) reste à juger à l'oreille, les mélodies sont aléatoires dans la gamme.
 
+## Retour de jeu n° 7 : décor en sprites
+
+- **Atlas Gemini** : une planche de 16 accessoires (platane, peuplier, olivier, fruitier, buissons, haie, lavande, banc, tables, fontaine, lampadaire, caisse de boules, muret, géraniums) générée dans Gemini (prompt dans `atlas/PROMPT_DECOR_GEMINI.md`, source `atlas/decor1.jpeg`), détourée et réduite par `python tools/slice_decor.py build` en `assets/decor/decor.webp` (220 Ko) + `js/ui/decor-atlas.js`.
+- **Rendu** : `sprites()` dans `vue3d.js` pose les sprites au sol (ancrés par leur pied, taille en unités du terrain, triés du fond vers l'avant, petite ombre) hors des haies, plus lampadaires, jardinières et pots dans la bande d'herbe ; l'emplacement suit la longueur du terrain (`DECOR_PLAN`). Le décor est repeint une fois l'atlas chargé (`Rendu.rafraichirDecor`) ; sans atlas, les anciens arbres dessinés en code reviennent.
+- À faire ensuite (idée du joueur) : boules d'acier réalistes, les deux équipes distinguées par un repère de couleur (anneau gravé) ou un halo de la couleur de l'équipe, au lieu de boules rouges et bleues.
+
 ## Vérifié
 
 - Solo complet (navigateur, 375 × 667) : partie menée jusqu'à l'écran de fin, aucune erreur console.

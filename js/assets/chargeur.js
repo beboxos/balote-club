@@ -1,4 +1,6 @@
 import { AVATARS } from '../config.js';
+import { DECOR } from '../ui/decor-atlas.js';
+import { poserAtlasDecor } from '../ui/vue3d.js';
 
 // Précharge polices, visuel d'accueil et avatars avec une progression réelle.
 // Aucun atlas : chaque fichier est indépendant et mis en cache par le navigateur.
@@ -27,6 +29,8 @@ export function charger(onProgression) {
     const src = heroSource();
     return src ? chargerImage(src) : Promise.resolve();
   });
+  // Atlas du décor : en cas d'échec, le décor reste celui dessiné en code.
+  taches.push(() => chargerImage(`${DECOR.image}?v=${DECOR.v}`).then((img) => poserAtlasDecor(DECOR, img), () => {}));
   for (const a of AVATARS) taches.push(() => chargerImage(`assets/avatars/${a}.webp`));
 
   let faits = 0;

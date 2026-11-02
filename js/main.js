@@ -642,6 +642,7 @@ async function demarrer() {
     reessayer.focus();
     return;
   }
+  rendu.rafraichirDecor();
   $('chargement').classList.add('est-fini');
   poserAmbiance();
   const code = new URL(location.href).searchParams.get('p');

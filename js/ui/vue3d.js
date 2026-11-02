@@ -272,6 +272,46 @@ function arbres(g, cam) {
   for (const [x, y] of places) arbre(g, cam, x, y, 150 + rng() * 30, rng, ['#7f9a56', '#3a5a30']);
 }
 
+// Atlas de sprites du décor (tools/slice_decor.py), posé par le chargeur une fois l'image décodée.
+// Sans atlas, le décor retombe sur les arbres dessinés en code.
+let atlas = null;
+export function poserAtlasDecor(donnees, image) { atlas = donnees && image ? { ...donnees, image } : null; }
+
+// Sprites : [nom, x, y (fraction de la longueur si y ≤ 1.5 → × TERRAIN.h), hauteur en unités du terrain].
+// Placés hors des haies, sauf lampadaires, jardinières et pots dans la bande d'herbe le long de la piste.
+const DECOR_PLAN = [
+  ['peuplier', 0.02, -150, 215], ['laurier', 0.2, -115, 60], ['haie', 0.4, -108, 52], ['haie', 0.62, -108, 52], ['buisson', 0.82, -112, 46],
+  ['platane', -115, 0.1, 175], ['laurier', -92, 0.27, 58], ['banc', -118, 0.4, 50], ['fruitier', -112, 0.56, 125],
+  ['buisson', -90, 0.7, 46], ['table-parasol', -122, 0.83, 96],
+  ['olivier', 480, 0.16, 145], ['buisson', 450, 0.3, 46], ['fontaine', 470, 0.44, 72], ['peuplier', 485, 0.62, 215],
+  ['laurier', 452, 0.76, 58], ['table-cafe', 480, 0.88, 56],
+  ['lampadaire', -22, 0.32, 128], ['lampadaire', 382, 0.68, 128],
+  ['lavande', -22, 0.52, 46], ['lavande', 382, 0.2, 46], ['geraniums', -24, 0.92, 38], ['geraniums', 384, 0.88, 38],
+  ['caisse-boules', 388, 0.97, 32], ['muret', -45, 1.03, 44],
+];
+
+function sprites(g, cam) {
+  const H = TERRAIN.h;
+  const items = DECOR_PLAN.map(([nom, a, b, hu]) => {
+    // Les entrées du haut donnent x en fraction de la largeur ; les autres donnent y en fraction de H.
+    const haut = b < -50 && a <= 1;
+    const x = haut ? a * (TERRAIN.l + 120) - 30 : a;
+    const y = haut ? b : b * H;
+    return { nom, x, y, hu, base: cam.projeter(x, y, 0) };
+  }).sort((p, q) => p.base.y - q.base.y);
+  for (const it of items) {
+    const sp = atlas.sprites[it.nom];
+    if (!sp) continue;
+    const hPx = it.hu * it.base.k;
+    const lPx = (hPx * sp.w) / sp.h;
+    g.fillStyle = 'rgba(0,0,0,.2)';
+    g.beginPath();
+    g.ellipse(it.base.x + lPx * 0.08, it.base.y, lPx * 0.42, lPx * 0.13, 0, 0, Math.PI * 2);
+    g.fill();
+    g.drawImage(atlas.image, sp.x, sp.y, sp.w, sp.h, it.base.x - lPx / 2, it.base.y - hPx, lPx, hPx);
+  }
+}
+
 // Image fixe du décor. Recalculée au redimensionnement.
 export function peindreDecor(g, cam, texture, echelleTex) {
   g.setTransform(1, 0, 0, 1, 0, 0);
@@ -279,7 +319,8 @@ export function peindreDecor(g, cam, texture, echelleTex) {
   haies(g, cam);
   piste(g, cam, texture, echelleTex);
   bordures(g, cam);
-  arbres(g, cam);
+  if (atlas) sprites(g, cam);
+  else arbres(g, cam);
   const { l, h } = cam;
   const v = g.createRadialGradient(l / 2, h * 0.5, h * 0.3, l / 2, h * 0.5, h * 0.8);
   v.addColorStop(0, 'rgba(0,0,0,0)');
