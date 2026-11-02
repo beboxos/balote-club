@@ -2,8 +2,8 @@
 // Toutes les positions sont en unités du terrain, projetées par la caméra.
 import { LANCER } from '../core/physique.js';
 
-// Les joueurs sont rapetissés par rapport à l'échelle des boules, sinon ils cachent la piste.
-const S = 0.62;
+// Échelle des joueurs par rapport aux boules (1 = taille réelle du jeu).
+const S = 1.0;
 const EPAULE_Z = 60;
 const LONG_BRAS = 27;
 
@@ -99,7 +99,7 @@ export function dessinerPerso(ctx, cam, { x, y, equipe, pose }) {
 }
 
 export function positionRepos(equipe) {
-  return { x: LANCER.x + (equipe === 0 ? -58 : 58), y: LANCER.y + 12 };
+  return { x: LANCER.x + (equipe === 0 ? -62 : 62), y: LANCER.y + 12 };
 }
 
 export const POSTE = { x: LANCER.x, y: LANCER.y + 8 };

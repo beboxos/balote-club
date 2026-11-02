@@ -2,12 +2,23 @@ import {
   creerEtat, ajouterBoule, lancer, step, distance,
   normaliserAngle, normaliserPuissance, PAS,
 } from './physique.js';
-import { deriver } from './rng.js';
+import { deriver, mulberry32 } from './rng.js';
 
 export const BUT = 5;
 // Boules par équipe : 3 par défaut (tête-à-tête), réglable en solo. Les duels restent à 3.
 export const BOULES_DEFAUT = 3;
-export const BOULES_CHOIX = [2, 3, 4];
+export const BOULES_CHOIX = [3, 6];
+
+// Dispersion du lancer : un joueur n'est jamais parfaitement précis. Les deux appareils la
+// tirent de la même graine et du même numéro de lancer (arithmétique entière seulement).
+const DISPERSION_ANGLE = 45;      // écart-type, centièmes de degré
+const DISPERSION_PORTEE = 0.022;  // écart-type relatif sur la puissance
+
+function bruit(graine, n) {
+  const rng = mulberry32(deriver(graine, 900000 + n));
+  const tirer = () => Math.max(-2.5, Math.min(2.5, (rng() + rng() + rng() + rng() - 2) * 1.7320508));
+  return { angle: tirer() * DISPERSION_ANGLE, puissance: tirer() * DISPERSION_PORTEE };
+}
 
 // Cochonnet dans le tiers haut de la piste, tiré de la graine serveur (entiers seulement).
 export function positionJack(graine, mene, essai) {
@@ -48,6 +59,7 @@ export class Moteur {
   constructor(graine, boules = BOULES_DEFAUT) {
     this.graine = graine;
     this.boules = boules;
+    this.lancers = 0;
     this.scores = [0, 0];
     this.mene = 1;
     this.essai = 0;
@@ -71,7 +83,8 @@ export class Moteur {
     const i = ajouterBoule(this.etat, e);
     this.jouees[e]++;
     this.dernier = e;
-    lancer(this.etat, i, angle, puissance);
+    const b = bruit(this.graine, this.lancers++);
+    lancer(this.etat, i, angle + b.angle, puissance * (1 + b.puissance));
     return i;
   }
 

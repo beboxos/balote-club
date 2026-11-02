@@ -1,6 +1,6 @@
 // node tests/physique.test.mjs
 import assert from 'node:assert/strict';
-import { creerEtat, ajouterBoule, lancer, step, sinCos, LANCER, MAX_PAS } from '../js/core/physique.js';
+import { creerEtat, ajouterBoule, lancer, step, sinCos, LANCER, MAX_PAS, PORTEE } from '../js/core/physique.js';
 import { executerReference } from './scenario.js';
 
 // Table trigo : écart max avec Math.sin (contrôle de précision uniquement).
@@ -21,6 +21,27 @@ while (!step(e)) n++;
 assert.ok(n < MAX_PAS);
 console.log('tir 0.8 : arrêt après', n, 'pas, y =', e.objets[b].y.toFixed(2), 'x =', e.objets[b].x.toFixed(4));
 assert.equal(e.objets[b].x, LANCER.x);
+
+// Cloche : la portée totale est linéaire en la puissance, et la boule est bien en l'air au début.
+for (const p of [0.2, 0.5, 0.9]) {
+  const ec = creerEtat({ x: 30, y: 30 });
+  const bc = ajouterBoule(ec, 0);
+  lancer(ec, bc, 27000, p);
+  step(ec);
+  assert.ok(ec.objets[bc].air > 0, 'la boule doit être en vol');
+  while (!step(ec));
+  const parcouru = LANCER.y - ec.objets[bc].y;
+  assert.ok(Math.abs(parcouru - PORTEE * p) < 3, `portée ${p} : ${parcouru} au lieu de ${PORTEE * p}`);
+}
+// Pendant le vol, pas de choc : une boule posée sur la trajectoire n'est pas touchée.
+const ev = creerEtat({ x: 30, y: 30 });
+const cible = ajouterBoule(ev, 1);
+ev.objets[cible].x = 180; ev.objets[cible].y = 400;
+const tireuse = ajouterBoule(ev, 0);
+lancer(ev, tireuse, 27000, 0.9);
+for (let k = 0; k < 20; k++) step(ev);
+assert.equal(ev.objets[cible].x, 180);
+assert.equal(ev.objets[cible].y, 400);
 
 // Choc frontal sur le cochonnet.
 const e2 = creerEtat({ x: 180, y: 300 });

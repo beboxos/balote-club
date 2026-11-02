@@ -8,7 +8,13 @@ export const JACK_R = 4.5;
 export const PAS = 1 / 120;
 export const FRICTION = 520;   // décélération de roulement, unités/s²
 export const V_MIN = 6;
-export const V_MAX = 780;      // portée ≈ puissance × V_MAX² / (2·FRICTION) ≈ puissance × 585
+export const V_MAX = 780;      // vitesse de départ d'un tir rasant (aide du bot, plus utilisé par le lancer)
+// Lancer en cloche : la boule vole en ligne droite (sans frottement), retombe, perd 65 % de sa
+// vitesse à l'impact puis roule. La portée totale est linéaire en la puissance.
+export const V_LANCER = 640;   // vitesse horizontale en vol à puissance 1
+export const T_VOL = 0.8;      // durée du vol à puissance 1, en secondes (∝ √puissance)
+export const IMPACT = 0.35;    // part de la vitesse conservée à l'atterrissage
+export const PORTEE = V_LANCER * V_LANCER * (T_VOL / V_LANCER + (IMPACT * IMPACT) / (2 * FRICTION));
 export const MAX_PAS = 1680;
 export const LANCER = { x: 180, y: 566 };
 
@@ -80,6 +86,7 @@ export function ajouterBoule(etat, equipe) {
   etat.objets.push({
     x: LANCER.x, y: LANCER.y, vx: 0, vy: 0,
     r: RAYON, m: MASSE_BOULE, vivant: true, equipe, jack: false,
+    air: 0, air0: 0, arc: 0,   // pas de vol restants, pas de vol au départ, hauteur du sommet
   });
   return etat.objets.length - 1;
 }
@@ -87,10 +94,14 @@ export function ajouterBoule(etat, equipe) {
 export function lancer(etat, boule, angle, puissance) {
   const o = etat.objets[boule];
   const { s, c } = sinCos(angle);
-  // Vitesse en racine de la puissance : la portée (∝ v²) devient linéaire au geste.
-  const v = V_MAX * Math.sqrt(normaliserPuissance(puissance));
+  // Vitesse et durée de vol en racine de la puissance : la portée devient linéaire au geste.
+  const racine = Math.sqrt(normaliserPuissance(puissance));
+  const v = V_LANCER * racine;
   o.vx = c * v;
   o.vy = s * v;
+  o.air0 = Math.max(1, Math.round((T_VOL * racine) / PAS));
+  o.air = o.air0;
+  o.arc = 20 + 120 * racine;
   etat.pas = 0;
 }
 
@@ -105,6 +116,22 @@ function integrer(etat) {
   for (let i = 0; i < objets.length; i++) {
     const o = objets[i];
     if (!o.vivant || (o.vx === 0 && o.vy === 0)) continue;
+    if (o.air > 0) {
+      // En vol : trajectoire droite sans frottement, ni choc ; à l'impact la vitesse chute.
+      o.x += o.vx * PAS;
+      o.y += o.vy * PAS;
+      o.air--;
+      if (o.air === 0) {
+        o.vx *= IMPACT;
+        o.vy *= IMPACT;
+        if (horsTerrain(o)) {
+          o.vivant = false;
+          o.vx = 0;
+          o.vy = 0;
+        }
+      }
+      continue;
+    }
     const v = Math.sqrt(o.vx * o.vx + o.vy * o.vy);
     if (v <= dec) {
       o.vx = 0;
@@ -130,10 +157,10 @@ function collisions(etat) {
   // Passe 1 : séparation positionnelle.
   for (let i = 0; i < objets.length; i++) {
     const a = objets[i];
-    if (!a.vivant) continue;
+    if (!a.vivant || a.air > 0) continue;
     for (let j = i + 1; j < objets.length; j++) {
       const b = objets[j];
-      if (!b.vivant) continue;
+      if (!b.vivant || b.air > 0) continue;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const rr = a.r + b.r;

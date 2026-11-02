@@ -3,12 +3,14 @@
 import { TERRAIN, LANCER } from '../core/physique.js';
 import { mulberry32 } from '../core/rng.js';
 
-const HAUTEUR = 230;                 // hauteur de la caméra au-dessus du sol
-const RECUL = 140;                   // distance derrière le cercle de lancer
-const TANGAGE = (26 * Math.PI) / 180;
+// Vue en hauteur, presque de dessus (type isométrique) : on voit le terrain en entier et la
+// hauteur des boules en l'air.
+const HAUTEUR = 600;                 // hauteur de la caméra au-dessus du sol
+const RECUL = 100;                   // distance derrière le cercle de lancer
+const TANGAGE = (50 * Math.PI) / 180;
 const Y_LANCER_ECRAN = 0.8;          // position verticale du cercle de lancer à l'écran
-const Y_FOND_ECRAN = 0.32;           // position du fond de piste
-const Y_FOND = 60;                   // ordonnée terrain du fond de piste
+const Y_FOND_ECRAN = 0.2;            // position du fond de piste
+const Y_FOND = 50;                   // ordonnée terrain du fond de piste
 
 // Les boules et le cochonnet sont dessinés un peu plus gros que leur rayon physique,
 // sinon le fond de piste les réduit à quelques pixels.
@@ -23,10 +25,14 @@ export class Camera {
     this.camY = LANCER.y + RECUL;
     const qLancer = this.q(LANCER.y);
     const qFond = this.q(Y_FOND);
-    this.f = Math.min((h * (Y_LANCER_ECRAN - Y_FOND_ECRAN)) / (qFond - qLancer), l * 1.4);
+    this.f = Math.min((h * (Y_LANCER_ECRAN - Y_FOND_ECRAN)) / (qFond - qLancer), l * 1.5);
     this.cx = l / 2;
     this.cy = h * Y_LANCER_ECRAN + this.f * qLancer;
     this.horizon = this.cy - this.f * Math.tan(TANGAGE);
+    // Écrasement vertical au cercle de lancer : pixels par unité en hauteur d'écran ÷ en largeur.
+    const a = this.projeter(LANCER.x, LANCER.y, 0);
+    const b = this.projeter(LANCER.x, LANCER.y - 10, 0);
+    this.ratio = (a.y - b.y) / (10 * a.k);
   }
 
   // Tangente de l'angle vu depuis l'axe optique pour un point (y, hauteur).
@@ -65,6 +71,7 @@ function hasard(graine) { return mulberry32(graine); }
 
 function ciel(g, cam, l) {
   const h = cam.horizon + 2;
+  if (h <= 2) return;
   const fond = g.createLinearGradient(0, 0, 0, h);
   fond.addColorStop(0, '#25344a');
   fond.addColorStop(0.55, '#6d7088');
@@ -108,45 +115,56 @@ function arbre(g, cam, x, y, hauteur, rng, teinte) {
 
 function fond(g, cam, l) {
   const rng = hasard(0xb10c);
-  // Terrain au-delà de la piste, jusqu'à l'horizon
-  const haut = cam.horizon;
-  const sol = g.createLinearGradient(0, haut, 0, cam.h);
-  sol.addColorStop(0, '#b99468');
-  sol.addColorStop(0.35, '#6f5a43');
-  sol.addColorStop(1, '#2a2019');
-  g.fillStyle = sol;
-  g.fillRect(0, haut, l, cam.h - haut);
-
-  // Rangée d'arbres lointains (masses sombres), puis platanes plus proches
-  for (let i = 0; i < 26; i++) {
-    const x = -260 + (i / 25) * 880 + (rng() - 0.5) * 20;
-    arbre(g, cam, x, -420 - rng() * 120, 170 + rng() * 60, rng, ['#4d6a55', '#2c4636']);
-  }
-  for (let i = 0; i < 7; i++) {
-    const x = -180 + (i / 6) * 720 + (rng() - 0.5) * 50;
-    arbre(g, cam, x, -150 - rng() * 60, 150 + rng() * 50, rng, ['#6e8a52', '#34502f']);
-  }
-
-  // Haie basse derrière le fond de piste
-  const a = cam.projeter(-400, -24, 0);
-  const b = cam.projeter(760, -24, 34);
-  const haie = g.createLinearGradient(0, b.y, 0, a.y);
-  haie.addColorStop(0, '#47663f');
-  haie.addColorStop(1, '#223421');
-  g.fillStyle = haie;
-  g.fillRect(0, b.y, l, a.y - b.y);
-  g.fillStyle = 'rgba(140,175,100,.35)';
-  for (let i = 0; i < 260; i++) {
+  const h = cam.h;
+  // Herbe sur tout l'écran (l'horizon est hors cadre), avec brins clairs et sombres.
+  const herbe = g.createLinearGradient(0, 0, 0, h);
+  herbe.addColorStop(0, '#5f7f43');
+  herbe.addColorStop(1, '#496a35');
+  g.fillStyle = herbe;
+  g.fillRect(0, 0, l, h);
+  for (let i = 0; i < 900; i++) {
+    g.strokeStyle = rng() < 0.5 ? 'rgba(150,190,100,.30)' : 'rgba(30,55,25,.30)';
+    g.lineWidth = 1;
+    const x = rng() * l;
+    const y = rng() * h;
     g.beginPath();
-    g.arc(rng() * l, b.y + rng() * (a.y - b.y), 1.2 * a.k + rng() * 1.5, 0, Math.PI * 2);
+    g.moveTo(x, y);
+    g.lineTo(x + (rng() - 0.5) * 3, y - 2 - rng() * 3);
+    g.stroke();
+  }
+
+  // Haie derrière le fond de piste et le long des côtés
+  for (const [x0, y0, x1, y1] of [[-400, -26, 760, -26], [-34, -26, -34, 700], [394, -26, 394, 700]]) {
+    const a = cam.projeter(x0, y0, 0);
+    const b = cam.projeter(x1, y1, 0);
+    const a2 = cam.projeter(x0, y0, 26);
+    const b2 = cam.projeter(x1, y1, 26);
+    const haie = g.createLinearGradient(0, Math.min(a2.y, b2.y), 0, Math.max(a.y, b.y));
+    haie.addColorStop(0, '#59803f');
+    haie.addColorStop(1, '#2c4727');
+    g.fillStyle = haie;
+    g.beginPath();
+    g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(b2.x, b2.y); g.lineTo(a2.x, a2.y);
+    g.closePath();
     g.fill();
   }
+
+  // Arbres autour de la piste : ombre au sol (soleil haut-gauche), tronc, houppier.
+  const arbres = [[-80, 130], [-90, 400], [440, 250], [450, 520], [150, -110], [330, -100]];
+  for (const [x, y] of arbres) {
+    const o = cam.projeter(x + 40, y + 45, 0);
+    g.fillStyle = 'rgba(0,0,0,.25)';
+    g.beginPath();
+    g.ellipse(o.x, o.y, 62 * o.k, 46 * o.k, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  for (const [x, y] of arbres) arbre(g, cam, x, y, 150 + rng() * 30, rng, ['#7f9a56', '#3a5a30']);
 }
 
 // Piste : la texture de terrain (vue du dessus) est étirée ligne par ligne.
 function piste(g, cam, texture, echelleTex, l, h) {
   const yFondPiste = cam.projeter(0, 0).y;
-  const debut = Math.max(Math.ceil(cam.horizon), Math.floor(yFondPiste));
+  const debut = Math.max(0, Math.ceil(cam.horizon), Math.floor(yFondPiste));
   for (let ey = debut; ey < h; ey++) {
     const y = cam.sol(ey + 0.5);
     if (y < 0 || y >= TERRAIN.h) continue;
@@ -196,12 +214,6 @@ export function peindreDecor(g, cam, texture, echelleTex) {
   fond(g, cam, l);
   piste(g, cam, texture, echelleTex, l, h);
   bordures(g, cam);
-  // Brume légère vers l'horizon
-  const brume = g.createLinearGradient(0, cam.horizon, 0, cam.horizon + (h - cam.horizon) * 0.38);
-  brume.addColorStop(0, 'rgba(240,184,140,.55)');
-  brume.addColorStop(1, 'rgba(240,184,140,0)');
-  g.fillStyle = brume;
-  g.fillRect(0, cam.horizon, l, (h - cam.horizon) * 0.38);
   // Vignette
   const v = g.createRadialGradient(l / 2, h * 0.55, h * 0.3, l / 2, h * 0.55, h * 0.85);
   v.addColorStop(0, 'rgba(0,0,0,0)');
@@ -213,8 +225,10 @@ export function peindreDecor(g, cam, texture, echelleTex) {
 // ---------------------------------------------------------------- Objets en perspective
 
 // Ombre au sol : cercle du terrain projeté, donc ellipse aplatie. Soleil haut-gauche.
-export function ombreSol(ctx, cam, x, y, rayon, alpha = 0.4) {
-  const p = cam.projeter(x + rayon * 0.55, y + rayon * 0.35, 0);
+export function ombreSol(ctx, cam, x, y, rayon, alpha = 0.4, hauteur = 0) {
+  // Plus la boule est haut, plus l'ombre s'écarte (soleil haut-gauche) et s'estompe.
+  alpha *= 1 / (1 + hauteur / 220);
+  const p = cam.projeter(x + rayon * 0.55 + hauteur * 0.45, y + rayon * 0.35 + hauteur * 0.6, 0);
   const avant = cam.projeter(x, y + rayon, 0);
   const arriere = cam.projeter(x, y - rayon, 0);
   const rx = rayon * p.k * 1.05;
@@ -248,29 +262,39 @@ export function cochonnet(ctx, px, py, rayon, tempsMs, calme) {
   ctx.restore();
 }
 
-// Ligne pointillée au sol + réticule elliptique à l'arrivée estimée.
-export function viseur(ctx, cam, x0, y0, x1, y1) {
-  const a = cam.projeter(x0, y0, 0);
-  const b = cam.projeter(x1, y1, 0);
+// Direction du tir : trait pointillé court au sol. Aucun point d'arrivée n'est montré,
+// c'est au joueur de doser la force.
+export function guide(ctx, cam, x0, y0, dx, dy) {
+  const a = cam.projeter(x0 + dx * 22, y0 + dy * 22, 0);
+  const b = cam.projeter(x0 + dx * 95, y0 + dy * 95, 0);
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,150,95,.92)';
-  ctx.lineWidth = Math.max(2, a.k * 1.3);
+  ctx.strokeStyle = 'rgba(255,170,115,.95)';
+  ctx.lineWidth = Math.max(2, a.k * 1.8);
   ctx.lineCap = 'round';
-  ctx.setLineDash([a.k * 7, a.k * 9]);
+  ctx.setLineDash([a.k * 5, a.k * 8]);
   ctx.beginPath();
   ctx.moveTo(a.x, a.y);
   ctx.lineTo(b.x, b.y);
   ctx.stroke();
-  ctx.setLineDash([]);
-  const r = 12 * b.k * GROSSISSEMENT;
-  const ry = Math.max(3, Math.abs(cam.projeter(x1, y1 + 12, 0).y - cam.projeter(x1, y1 - 12, 0).y) / 2 * GROSSISSEMENT);
-  ctx.lineWidth = Math.max(1.5, b.k * 1.6);
+  ctx.restore();
+}
+
+// Jauge de force : anneau autour du cercle de lancer qui se remplit.
+export function jauge(ctx, cam, x, y, p) {
+  const R = 30;
+  const c = cam.projeter(x, y, 0);
+  const ry = Math.abs(cam.projeter(x, y + R, 0).y - cam.projeter(x, y - R, 0).y) / 2;
+  const rx = R * c.k;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(3, c.k * 4);
+  ctx.strokeStyle = 'rgba(0,0,0,.35)';
   ctx.beginPath();
-  ctx.ellipse(b.x, b.y, r, ry, 0, 0, Math.PI * 2);
-  ctx.moveTo(b.x - r * 1.5, b.y);
-  ctx.lineTo(b.x - r * 0.55, b.y);
-  ctx.moveTo(b.x + r * 0.55, b.y);
-  ctx.lineTo(b.x + r * 1.5, b.y);
+  ctx.ellipse(c.x, c.y, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,150,95,.98)';
+  ctx.beginPath();
+  ctx.ellipse(c.x, c.y, rx, ry, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p);
   ctx.stroke();
   ctx.restore();
 }

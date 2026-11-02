@@ -32,13 +32,25 @@
 | Boules par joueur | 4 | 3 par défaut, 2, 3 ou 4 au choix en solo | Les duels restent à 3 : le nombre de boules n'est pas stocké côté serveur (pas de changement de schéma). |
 | Taille à l'écran | Taille réelle | Boules ×1,2, cochonnet ×2,2, joueurs à 62 % | Au fond de la piste, les rayons réels tombent à quelques pixels. |
 
-L'empreinte de référence de `tests/determinisme.html` (`af2de690`) reste valable : le scénario est figé à 4 boules.
+L'empreinte de référence de `tests/determinisme.html` (`af2de690`) valait pour la v1 ; la cloche l'a changée (voir plus bas).
+
+## Retour de jeu n° 2 : cloche, difficulté, vue en hauteur
+
+| Sujet | Avant | Maintenant | Justification |
+|---|---|---|---|
+| Lancer | Boule qui roule en ligne droite dès le départ | Cloche : vol sans frottement, impact (35 % de la vitesse conservée), puis roulement. Pendant le vol, la boule ne touche personne. Portée totale linéaire en la puissance (≈ 560 unités à puissance 1) | Retour de jeu : le lancer droit n'est pas de la pétanque. La hauteur et l'ombre au sol décalée rendent la cloche lisible. |
+| Difficulté | Un réticule indiquait le point d'arrêt : il suffisait de le poser sur la cible | Plus de point d'arrivée affiché : un trait court donne la direction, un anneau montre la force. Le joueur dose à l'œil | Retour de jeu : la partie était gagnée d'avance. |
+| Dispersion | Aucune | Chaque lancer est perturbé (écart-type de 0,45° et de 2,2 % de portée), tiré de la graine du serveur et du numéro du lancer. Les deux appareils obtiennent donc le même résultat | Un joueur n'est jamais parfaitement précis. L'arithmétique est entière, donc le résultat reste identique d'un appareil à l'autre. |
+| Boules par joueur | 3 par défaut, 2 à 4 au choix | 3 ou 6 au choix en solo (duels à 3) | Retour de jeu. |
+| Vue | Perspective basse derrière le lanceur | Caméra en hauteur, tangage 50°, terrain entier visible avec herbe, haies et arbres autour. Les joueurs restent animés | Retour de jeu : vue de dessus de type isométrique, comme la référence. Le glissement du doigt est corrigé de l'écrasement vertical. |
+
+La référence de `tests/determinisme.html` change avec la nouvelle physique : voir la valeur affichée par `node tests/physique.test.mjs`.
 
 ## Vérifié
 
 - Solo complet (navigateur, 375 × 667) : partie menée jusqu'à l'écran de fin, aucune erreur console.
 - `tests/duel.test.mjs` : deux clients lockstep reliés en mémoire, doublons de livraison ignorés, coup hors tour refusé, coup hors séquence ignoré, scores et empreintes identiques.
-- Empreinte de référence identique sous Node et Chromium mobile (`af2de690`).
+- Empreinte de référence identique sous Node et Chromium mobile (v1 : `af2de690`).
 - Lighthouse mobile (serveur local, sans compression) : performance 94, accessibilité 100, 323 Ko au premier rendu, aucune 404.
 - Aucun `TODO`, `FIXME`, `console.log` ; aucun chemin absolu ; aucune fonction interdite dans `physique.js`.
 

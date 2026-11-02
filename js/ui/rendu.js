@@ -1,13 +1,13 @@
-import { TERRAIN, LANCER, RAYON, V_MAX, FRICTION, sinCos, distance } from '../core/physique.js';
+import { TERRAIN, LANCER, RAYON, sinCos, distance } from '../core/physique.js';
 import { meilleures } from '../core/partie.js';
 import { dessinerTerrain, spriteBoule, Effets, viderCaches } from './matieres.js';
-import { Camera, peindreDecor, ombreSol, cochonnet, viseur, GROSSISSEMENT } from './vue3d.js';
+import { Camera, peindreDecor, ombreSol, cochonnet, guide, jauge, GROSSISSEMENT } from './vue3d.js';
 import { dessinerPerso, positionRepos, POSTE } from './perso.js';
 
 const DRAG_MAX = 150;     // unités du terrain pour la puissance pleine
 const PUISSANCE_MIN = 0.04;
 const ANGLE_DEFAUT = 27000;
-const PORTEE = (V_MAX * V_MAX) / (2 * FRICTION);   // arrivée estimée à puissance 1, sans choc
+const MAIN_LACHER = 28;  // hauteur de la main au lâcher, point de départ de la cloche
 const TEX = 2;            // pixels de texture par unité du terrain
 const GROSSISSEMENT_JACK = 2.2;
 const SPRITE_R = 40;      // rayon de référence des sprites de boule, réduit ou agrandi au dessin
@@ -117,7 +117,7 @@ export class Rendu {
       if (!this.drag || e.pointerId !== this.drag.id) return;
       const p = this.coord(e.clientX, e.clientY);
       const dx = (this.drag.depart.x - p.x) / this.unite;
-      const dy = (this.drag.depart.y - p.y) / this.unite;
+      const dy = (this.drag.depart.y - p.y) / this.unite / this.cam.ratio;
       const long = Math.sqrt(dx * dx + dy * dy);
       if (long < 4) { this.visee = null; return; }
       const cd = Math.round((Math.atan2(dy, dx) * 18000) / Math.PI);
@@ -174,7 +174,7 @@ export class Rendu {
     return new Promise((ok) => {
       setTimeout(() => {
         g.lache = true;
-        this.vol = { t0: performance.now(), T: 250 + 350 * puissance, main: g.main };
+        this.vol = { main: g.main };
         ok();
       }, DUREE_GESTE * RELACHE);
     });
@@ -246,31 +246,21 @@ export class Rendu {
     this.effets.dessinerDecalques(ctx, cam);
 
     const objets = etat.objets;
-    const enVolIdx = this.vol && t - this.vol.t0 < this.vol.T ? objets.length - 1 : -1;
-    // Boule en vol : position visuelle = position physique + hauteur de l'arc + écart avec la main.
-    let aerienne = null;
-    if (enVolIdx > 0 && objets[enVolIdx].vivant) {
-      const k = (t - this.vol.t0) / this.vol.T;
-      const o = objets[enVolIdx];
-      const main = this.vol.main;
-      const r = (1 - Math.min(1, (t - this.vol.t0) / 140)) ** 2;
-      aerienne = {
-        i: enVolIdx,
-        x: o.x + (main ? (main.x - LANCER.x) * r : 0),
-        y: o.y + (main ? (main.y - LANCER.y) * r : 0),
-        h: RAYON + (1 - k) ** 2 * (main ? main.z - RAYON : 40) * 0.9 + Math.sin(Math.PI * k) * 14,
-      };
+    // Boules en l'air : la physique donne le vol restant, on en tire hauteur et décalage visuels.
+    const aeriennes = [];
+    for (let i = 1; i < objets.length; i++) {
+      const o = objets[i];
+      if (o.vivant && o.air > 0) aeriennes.push(i);
     }
 
     // Ombres puis corps, du fond vers le premier plan.
     const ordre = [];
-    for (let i = 0; i < objets.length; i++) if (objets[i].vivant && i !== enVolIdx) ordre.push(i);
+    for (let i = 0; i < objets.length; i++) if (objets[i].vivant && !(objets[i].air > 0)) ordre.push(i);
     ordre.sort((a, b) => objets[a].y - objets[b].y);
     for (const i of ordre) {
       const o = objets[i];
       ombreSol(ctx, cam, o.x, o.y, o.r * (i === 0 ? 1.1 : 1), i === 0 ? 0.32 : 0.42);
     }
-    if (aerienne) ombreSol(ctx, cam, objets[aerienne.i].x, objets[aerienne.i].y, RAYON * 1.1, 0.3);
     for (const i of ordre) {
       const o = objets[i];
       if (i === 0) {
@@ -285,8 +275,8 @@ export class Rendu {
 
     if (this.visee && this.peutViser()) {
       const { s, c } = sinCos(this.visee.cd);
-      const d = PORTEE * this.visee.p;
-      viseur(ctx, cam, LANCER.x, LANCER.y, LANCER.x + c * d, LANCER.y + s * d);
+      jauge(ctx, cam, LANCER.x, LANCER.y, this.visee.p);
+      guide(ctx, cam, LANCER.x, LANCER.y, c, s);
     }
 
     // Joueurs : celui qui lance au cercle, l'autre à côté ; ils glissent de l'un à l'autre.
@@ -310,10 +300,18 @@ export class Rendu {
     } else if (enMain && mains[enMain.equipe]) {
       this.bouleMain(ctx, mains[enMain.equipe], enMain.equipe, enMain.index, enMain.alpha);
     }
-    if (aerienne) {
-      const o = objets[aerienne.i];
-      const c = cam.projeter(aerienne.x, aerienne.y, aerienne.h);
-      this.spriteAt(ctx, c.x, c.y, RAYON * c.k * GROSSISSEMENT, o.equipe, aerienne.i, 1);
+    // Les boules en l'air passent au-dessus de tout, avec leur ombre au sol décalée.
+    for (const i of aeriennes) {
+      const o = objets[i];
+      const k = 1 - o.air / o.air0;
+      const h = RAYON + (MAIN_LACHER - RAYON) * (1 - k) + o.arc * 4 * k * (1 - k);
+      const main = this.vol?.main;
+      const e = (1 - k) ** 4;
+      const x = o.x + (main ? (main.x - LANCER.x) * e : 0);
+      const y = o.y + (main ? (main.y - LANCER.y) * e : 0);
+      ombreSol(ctx, cam, x, y, RAYON, 0.42, h - RAYON);
+      const c = cam.projeter(x, y, h);
+      this.spriteAt(ctx, c.x, c.y, RAYON * c.k * GROSSISSEMENT * (1 + (h - RAYON) / 160), o.equipe, i, 1);
     }
 
     this.effets.dessinerParticules(ctx, cam);

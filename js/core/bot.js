@@ -1,4 +1,4 @@
-import { step, ajouterBoule, lancer, LANCER, V_MAX, FRICTION } from './physique.js';
+import { step, ajouterBoule, lancer, LANCER, PORTEE } from './physique.js';
 import { meilleures } from './partie.js';
 import { gauss } from './rng.js';
 
@@ -9,7 +9,6 @@ export const NIVEAUX = [
   { nom: 'Maître', erreur: 0.04, sousTir: 0, essais: 24 },
 ];
 
-const PORTEE = (V_MAX * V_MAX) / (2 * FRICTION);
 const RAD_EN_CD = 18000 / Math.PI;
 
 function versCible(x, y) {
