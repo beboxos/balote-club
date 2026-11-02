@@ -23,6 +23,10 @@ alter table public.bal_profils drop column if exists essais, drop column if exis
 -- Squelette d'un pseudo : minuscules, sans accents, sans espaces ni _ . - , 0 lu o, 1 et i lus l. Deux pseudos
 -- au même squelette (« Léa », « l.e.a », « LEA », « Lé1a », « Léia » et « Léla ») sont le même pseudo : pas de sosies.
 -- Il couvre exactement les caractères que bal_pseudo_valide autorise. Index recréé pour recalculer.
+-- Échange d'index en transaction : si des pseudos existants entrent en collision sous le nouveau
+-- squelette, la création de l'index unique échoue et tout est annulé (l'ancien index reste en place) ;
+-- renommer alors les doublons puis rejouer.
+begin;
 drop index if exists public.bal_profils_squelette;
 create or replace function public.bal_squelette(p text)
 returns text language sql immutable as $$
@@ -34,6 +38,7 @@ returns text language sql immutable as $$
     '01i', 'oll');
 $$;
 create unique index if not exists bal_profils_squelette on public.bal_profils (public.bal_squelette(pseudo));
+commit;
 
 -- Échecs de connexion par appareil : un inconnu ne peut pas verrouiller le propriétaire à lui seul.
 create table if not exists public.bal_echecs (
