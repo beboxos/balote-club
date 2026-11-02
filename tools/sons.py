@@ -35,11 +35,14 @@ def bruit_filtre(n, coupure):
 
 
 def impact_boule():
-    x = t(0.28)
-    s = sum(a * np.sin(2 * np.pi * f * x) for f, a in [(2140, 1), (3390, 0.7), (5230, 0.45), (7810, 0.25)])
-    s = env(s, 0.0005, 0.045)
-    clic = env(rng.standard_normal(len(x)), 0.0002, 0.004) * 0.8
-    return s + clic
+    # Acier sur acier : un « tac » sec. Peu de partiels aigus et une extinction très rapide,
+    # sinon on entend du verre ou une cloche ; le corps grave donne le poids de la boule.
+    x = t(0.14)
+    corps = sum(a * np.sin(2 * np.pi * f * x) for f, a in [(1530, 1), (2370, 0.8), (3810, 0.45), (5600, 0.2)])
+    corps = env(corps, 0.0002, 0.011)
+    sourd = env(np.sin(2 * np.pi * 430 * x), 0.0003, 0.010) * 0.5
+    claque = env(bruit_filtre(len(x), 4200) * 1.0, 0.0001, 0.0022) * 1.6
+    return corps + sourd + claque
 
 
 def impact_jack():
