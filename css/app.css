@@ -292,6 +292,11 @@ button, input { font: inherit; color: inherit; }
 .reglage-nom { margin: 0; display: flex; justify-content: space-between; font-weight: 600; }
 .reglage-nom output { color: var(--braise); }
 .reglage-aide { margin: 0; color: var(--creme-2); font-size: 0.8125rem; }
+.liste {
+  min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--ligne); border-radius: var(--r-2);
+  background: var(--espresso-3); color: var(--creme); font: inherit;
+}
 .reglage input[type="range"] { width: 100%; accent-color: var(--braise); min-height: 32px; }
 
 /* Écrans courts (iPhone SE et moins) */

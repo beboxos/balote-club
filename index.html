@@ -41,7 +41,7 @@
             <span class="sr">Pseudo</span>
             <input id="pseudo" type="text" maxlength="14" autocomplete="nickname" spellcheck="false" placeholder="Votre pseudo">
           </label>
-          <button type="button" class="icone-btn" id="btn-reglages" aria-label="Réglages du terrain">
+          <button type="button" class="icone-btn" id="btn-reglages" aria-label="Réglages">
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="15" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
           </button>
           <button type="button" class="icone-btn" id="btn-son" aria-pressed="true" aria-label="Son activé">
@@ -183,7 +183,7 @@
   </dialog>
 
   <dialog id="dialogue-reglages" class="dialogue" aria-labelledby="titre-reglages">
-    <h2 id="titre-reglages" class="titre titre--s">Réglages du terrain</h2>
+    <h2 id="titre-reglages" class="titre titre--s">Réglages</h2>
     <div class="reglage">
       <p class="reglage-nom">Roulage</p>
       <div class="segment segment--sol" role="radiogroup" aria-label="Terrain (solo et deux joueurs)">
@@ -205,6 +205,13 @@
         <button type="button" role="radio" aria-checked="false" data-longueur="long">Long</button>
         <button type="button" role="radio" aria-checked="false" data-longueur="tresLong">Très long</button>
       </div>
+    </div>
+    <div class="reglage">
+      <label class="reglage-nom" for="reglage-musique">Musique <output id="sortie-musique">40 %</output></label>
+      <input type="range" id="reglage-musique" min="0" max="100" step="10" value="40">
+      <label class="sr" for="reglage-piste">Piste</label>
+      <select id="reglage-piste" class="liste"></select>
+      <p class="reglage-aide" id="piste-en-cours">Six ambiances chill, enchaînées ou au choix.</p>
     </div>
     <p class="reglage-aide">Les duels en ligne utilisent toujours Terre, 30 % de cailloux et la longueur normale.</p>
     <button type="button" class="btn btn--plein" id="btn-fermer-reglages">Fermer</button>

@@ -5,6 +5,7 @@ import { jouerBot, NIVEAUX } from './core/bot.js';
 import { mulberry32 } from './core/rng.js';
 import { Rendu } from './ui/rendu.js';
 import { audio } from './ui/audio.js';
+import { Musique, PISTES } from './ui/musique.js';
 import * as ui from './ui/ecrans.js';
 import { charger, poserAmbiance } from './assets/chargeur.js';
 import {
@@ -28,6 +29,12 @@ const prefs = {
 prefs.cailloux = Math.min(100, Math.max(0, Math.round(Number(lire(STOCKAGE.cailloux, CAILLOUX_DEFAUT)) / 10) * 10));
 if (Number.isNaN(prefs.cailloux)) prefs.cailloux = CAILLOUX_DEFAUT;
 prefs.longueur = LONGUEURS[lire(STOCKAGE.longueur, '')] ? lire(STOCKAGE.longueur, '') : LONGUEUR_DEFAUT;
+prefs.musique = Math.min(100, Math.max(0, Math.round(Number(lire(STOCKAGE.musique, 40)) / 10) * 10));
+if (Number.isNaN(prefs.musique)) prefs.musique = 40;
+prefs.piste = PISTES.some((p) => p.id === lire(STOCKAGE.piste, '')) ? lire(STOCKAGE.piste, '') : 'auto';
+const musique = new Musique(audio);
+musique.volume = prefs.musique / 100;
+musique.choisir(prefs.piste);
 const IDS_SOLS = Object.keys(SOLS);
 const IDS_LONGUEURS = Object.keys(LONGUEURS);
 
@@ -404,7 +411,7 @@ function brancherInterface() {
     son.setAttribute('aria-label', audio.actif ? 'Son activé' : 'Son coupé');
   };
   majSon();
-  son.addEventListener('click', () => { audio.basculer(); majSon(); });
+  son.addEventListener('click', () => { audio.basculer(); majSon(); musique.appliquerVolume(); });
 
   const seg = document.querySelectorAll('.segment [data-niveau]');
   const majNiveau = () => seg.forEach((b) => b.setAttribute('aria-checked', String(Number(b.dataset.niveau) === prefs.niveau)));
@@ -500,6 +507,33 @@ function brancherInterface() {
     majCailloux();
   });
 
+  const curseurMusique = $('reglage-musique');
+  curseurMusique.value = String(prefs.musique);
+  const majMusique = () => { $('sortie-musique').textContent = `${prefs.musique} %`; };
+  majMusique();
+  curseurMusique.addEventListener('input', () => {
+    prefs.musique = Number(curseurMusique.value);
+    ecrire(STOCKAGE.musique, String(prefs.musique));
+    musique.volume = prefs.musique / 100;
+    majMusique();
+    musique.appliquerVolume();
+    if (prefs.musique > 0) musique.demarrer();
+  });
+  const listePiste = $('reglage-piste');
+  for (const [id, nom] of [['auto', 'Enchaînement automatique'], ...PISTES.map((p) => [p.id, p.nom])]) {
+    const o = document.createElement('option');
+    o.value = id;
+    o.textContent = nom;
+    listePiste.appendChild(o);
+  }
+  listePiste.value = prefs.piste;
+  listePiste.addEventListener('change', () => {
+    prefs.piste = listePiste.value;
+    ecrire(STOCKAGE.piste, prefs.piste);
+    musique.choisir(prefs.piste);
+  });
+  musique.surChangement = (p) => { $('piste-en-cours').textContent = `En cours : ${p.nom}`; };
+
   $('btn-reglages').addEventListener('click', () => $('dialogue-reglages').showModal());
   $('btn-fermer-reglages').addEventListener('click', () => $('dialogue-reglages').close());
 
@@ -577,6 +611,11 @@ function brancherInterface() {
   // Audio : contexte démarré au premier geste.
   const premierGeste = () => {
     audio.deverrouiller();
+    // L'horloge audio démarre de façon asynchrone : on lance la musique dès qu'elle tourne.
+    const attente = setInterval(() => {
+      if (audio.ctx?.state === 'running') { clearInterval(attente); if (prefs.musique > 0) musique.demarrer(); }
+    }, 100);
+    setTimeout(() => clearInterval(attente), 5000);
     window.removeEventListener('pointerdown', premierGeste, true);
     window.removeEventListener('keydown', premierGeste, true);
   };
@@ -610,7 +649,7 @@ async function demarrer() {
 }
 
 // Accroche d'inspection pour les tests manuels (lecture seule de la session courante).
-Object.defineProperty(window, 'BALOTE', { value: Object.freeze({ get session() { return session; }, get rendu() { return rendu; } }) });
+Object.defineProperty(window, 'BALOTE', { value: Object.freeze({ get session() { return session; }, get rendu() { return rendu; }, get musique() { return musique; } }) });
 
 $('btn-reessayer').addEventListener('click', demarrer);
 brancherInterface();
