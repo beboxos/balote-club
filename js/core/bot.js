@@ -1,4 +1,4 @@
-import { step, ajouterBoule, lancer, LANCER, portee } from './physique.js';
+import { step, ajouterBoule, lancer, LANCER, TERRAIN, portee } from './physique.js';
 import { meilleures } from './partie.js';
 import { gauss } from './rng.js';
 
@@ -31,12 +31,24 @@ function evaluer(etat, equipe) {
   return eux - nous;
 }
 
-function simuler(etat, equipe, cd, p) {
+function simulerUnique(etat, equipe, cd, p) {
   const copie = cloner(etat);
   const i = ajouterBoule(copie, equipe);
   lancer(copie, i, cd, p);
   while (!step(copie));
   return evaluer(copie, equipe);
+}
+
+// Un coup est jugé sur sa valeur au pire : tel quel, un peu trop fort, et légèrement dévié à gauche ou
+// à droite. Un tir sur une boule qui ne passe qu'à un cheveu avant le fond, ou qui rate sa cible au
+// moindre écart de visée, ne vaut alors plus rien : sur un terrain long, une erreur d'angle se paie
+// en dizaines d'unités et la boule ratée sort par le fond.
+const MARGE_FORCE = 0.05;
+function simuler(etat, equipe, cd, p, ecart) {
+  let pire = simulerUnique(etat, equipe, cd, p);
+  pire = Math.min(pire, simulerUnique(etat, equipe, cd, Math.min(1, p * (1 + MARGE_FORCE))));
+  pire = Math.min(pire, simulerUnique(etat, equipe, cd + ecart, p));
+  return Math.min(pire, simulerUnique(etat, equipe, cd - ecart, p));
 }
 
 // Choisit un coup (angle en centièmes de degré, puissance 0..1).
@@ -54,6 +66,9 @@ export function choisirCoup(moteur, niveau, rng) {
       puissance: 0.25 + rng() * 0.6,
     };
   }
+
+  // Écart de visée typique du niveau (le bot se trompe d'autant, voir plus bas).
+  const ecartVisee = Math.round(((cfg.erreur / 2) * RAD_EN_CD) / TERRAIN.k);
 
   // Candidat de base : pointer au cochonnet.
   const cible = versCible(jack.x, jack.y);
@@ -80,8 +95,10 @@ export function choisirCoup(moteur, niveau, rng) {
       }
       if (gene) {
         const c = versCible(gene.x, gene.y);
+        // Le surplus de puissance d'un tir se règle en distance, pas en proportion : sur un terrain
+        // long, la même proportion enverrait la boule loin derrière le fond.
         for (const surplus of [1.15, 1.35, 1.6]) {
-          candidats.push({ cd: c.cd, p: Math.min(1, (c.dist / PORTEE) * surplus) });
+          candidats.push({ cd: c.cd, p: Math.min(1, (c.dist / PORTEE) * (1 + (surplus - 1) / TERRAIN.k)) });
         }
       }
     }
@@ -91,14 +108,18 @@ export function choisirCoup(moteur, niveau, rng) {
   if (candidats.length > 1) {
     let meilleur = -Infinity;
     for (const c of candidats) {
-      const v = simuler(etat, equipe, c.cd, c.p);
+      const v = simuler(etat, equipe, c.cd, c.p, ecartVisee);
       if (v > meilleur) { meilleur = v; choix = c; }
     }
   }
 
   // Erreur humaine : gaussienne seedée, amplitude ≈ 2σ.
-  const errAngle = gauss(rng) * (cfg.erreur / 2) * RAD_EN_CD;
-  const errPuiss = 1 + gauss(rng) * cfg.erreur * 0.18;
+  // Sur un terrain long, la même erreur relative couvre plus de terrain : on la ramène à une erreur
+  // absolue comparable (÷ k), et un coup trop fort (qui sort au fond) est moins fréquent qu'un trop court.
+  const k = TERRAIN.k;
+  const errAngle = (gauss(rng) * (cfg.erreur / 2) * RAD_EN_CD) / k;
+  const g = gauss(rng) * cfg.erreur * 0.18 / k;
+  const errPuiss = 1 + (g > 0 ? g * 0.6 : g);
   const p = choix.p * (1 - cfg.sousTir) * errPuiss;
   return {
     angle: Math.round((choix.cd + errAngle + 36000) % 36000),

@@ -75,6 +75,8 @@ La référence de `tests/determinisme.html` change avec la nouvelle physique : v
 - Le duel en ligne reste sur Terre, 30 % et longueur normale (rien de plus dans le schéma). Empreinte de référence inchangée : `b2d3e572`.
 - Non vérifié : écoute réelle sur téléphone (niveaux relatifs mesurés à l'analyseur seulement), lisibilité du terrain long sur petit écran.
 
+- **Bot dosé sur terrain long** (retour : « l'ordinateur joue trop fort ») : mesure bot contre bot, 13 % de boules sorties au fond sur terrain long contre 3 % sur terrain normal, surtout des tirs ratés (une petite erreur d'angle à 600 unités fait manquer la cible et la boule file dehors). Corrections dans `bot.js` : chaque coup est jugé sur son pire cas (tel quel, 5 % trop fort, dévié d'un écart de visée à gauche ou à droite), le surplus de puissance des tirs se règle en distance (÷ k) et l'erreur du bot est ramenée à une erreur absolue comparable (÷ k, trop fort moins fréquent que trop court). Résultat : 1 % et 0 % de sorties sur long et très long, `tests/bot.test.mjs`. Les duels bot (tests) changent de scores, la physique et l'empreinte de référence non.
+
 ## Vérifié
 
 - Solo complet (navigateur, 375 × 667) : partie menée jusqu'à l'écran de fin, aucune erreur console.
