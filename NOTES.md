@@ -1,0 +1,43 @@
+# Écarts par rapport à la spécification v1
+
+| § | Spécification | Réalisation | Justification |
+|---|---|---|---|
+| 5 | Table `Float32Array(720)` « pré-calculée au chargement » | Table remplie par **série de Taylor** (`+ - * /` seulement), avec interpolation linéaire entre les entrées | Remplie avec `Math.sin`, la table ne serait pas garantie identique au bit près entre JavaScriptCore et V8. L'interpolation évite un pas de 0,5° qui décalerait le tir d'environ une demi-boule en fond de terrain. |
+| 5, 8 | `angle float8` | Angle **quantifié en centièmes de degré** (entier 0–35999), puissance en millièmes, avant envoi et avant simulation | Les deux clients simulent exactement la même entrée, quelle que soit la précision du geste. |
+| 7 | `lancer(…, puissance)` | Vitesse = `V_MAX × √puissance` | La portée (∝ v²) devient linéaire au geste : la plage utile passe d'environ 10 % à environ 25 % de la course du doigt. La puissance reste proportionnelle au geste, comme demandé. |
+| 3.6 | « Boule sortie du terrain (marge 40) » | La piste jouable est le rectangle intérieur `[40, 320] × [40, 600]` ; une boule dont le centre en sort est morte | Interprétation de la marge comme bande hors-jeu. Elle garde la piste entière visible sous l'échelle « cover ». |
+| 3 | Non spécifié | Point de lancer fixe `(180, 566)` ; cochonnet tiré de la graine serveur dans `x ∈ [100, 260]`, `y ∈ [80, 200]` ; ouverture : rouge (l'hôte) à la mène 1, puis l'équipe qui a marqué ; cochonnet sorti : mène rejouée avec un nouveau tirage et le même ouvreur | Choix validés avant l'implémentation. Une équipe sans boule vivante est « la plus éloignée » (distance infinie). En égalité parfaite de fin de mène, personne ne marque. |
+| 7 / 9.4 | `audio.js` : un audio-sprite / 9.4 : fichiers séparés | **Fichiers séparés** (OGG ou MP3 selon le support), décodés une fois en `AudioBuffer` au premier geste | La 9.4 est plus précise et justifiée (8 sons courts). |
+| 6 | Arborescence imposée | En plus : `tests/` (tests Node + page de déterminisme), `tools/serveur.py` (serveur local sans cache), `tools/sons.py` (synthèse des sons), `NOTES.md` | Outillage de vérification ; rien de cela n'est chargé par le jeu. |
+| 7 | Événements `coup` et `abandon` | En plus : `profil` (pseudo et avatar) et `arrivee` (l'invité prévient l'hôte), plus un abonnement `postgres_changes` sur `coups` | Il faut afficher le nom de l'adversaire. L'hôte doit démarrer sans attendre son sondage de 3 s. Le journal sert de filet si un broadcast se perd ; les doublons sont écartés par `seq`. |
+| 8 | Schéma « exactement » | En plus : RPC `cloturer_partie(id, statut)`, index **unique** `(partie_id, seq)` et `grant` explicites (`select` sur `parties`, `select, insert` sur `coups` pour `authenticated`, rien pour `anon`) | Sans policy `update`, il fallait une RPC pour passer une partie en `fin` ou `abandon`. L'unicité rejette côté serveur un coup dupliqué. Les projets Supabase récents n'accordent plus de droits table par défaut : sans ces `grant`, la lecture et l'insertion échouaient malgré les policies. |
+| 8 | `seed bigint` | Graine tirée sur 31 bits | Le nombre reste exact en JavaScript (sous 2^53) et identique sur tous les clients. |
+| 11 | `user-scalable=no` | **Retiré** du viewport | Contradiction avec le critère 14.8 : Lighthouse pénalise `user-scalable=no` en accessibilité (94 avec, 100 sans), et iOS Safari l'ignore depuis iOS 10. Le zoom involontaire reste neutralisé par `touch-action: none` sur le canvas, `touch-action: manipulation` sur les boutons et des champs en 16 px. |
+| 9.5 | `inter-tight-latin-400.woff2` et `-600.woff2` | Les deux fichiers sont livrés, mais un seul `@font-face` (`font-weight: 400 600`) les remplace | Google Fonts sert Inter Tight en police variable : les deux fichiers sont identiques à l'octet près. Les charger tous les deux coûtait 45 Ko pour rien. |
+| 9.6 | Total assets ≤ 700 Ko | Un client télécharge environ 330 Ko d'assets (une variante par image, un format audio). Toutes variantes confondues, le dossier fait environ 1,3 Mo | Le budget est lu comme poids transféré par client. AVIF et WebP × 3 largeurs dépasseraient sinon 700 Ko à eux seuls. |
+| 9.3 | Hero : « trois boules et un cochonnet » | Le visuel généré montre davantage de boules, recadrées sur le haut | Meilleur rendu parmi quatre générations SDXL. À régénérer si le nombre exact compte. |
+| 10 | Boutons ≥ 58 px | Boutons d'action à 58 px ; icônes (son, quitter) à 44–48 px | Le bandeau du bas doit laisser le cercle de lancer visible sur 375 × 667. 44 px reste au-dessus du minimum WCAG. |
+| 12 | Score recalculé depuis le journal | En fin de mène, le score affiché vient de `rejouer(graine, journal)`, et non de l'état en mémoire | Conforme. Le point d'accroche `demanderValidation()` (Edge Function `valider_partie`) est prévu dans `reseau.js`, sans implémentation. |
+
+## Vérifié
+
+- Solo complet (navigateur, 375 × 667) : partie menée jusqu'à l'écran de fin, aucune erreur console.
+- `tests/duel.test.mjs` : deux clients lockstep reliés en mémoire, doublons de livraison ignorés, coup hors tour refusé, coup hors séquence ignoré, scores et empreintes identiques.
+- Empreinte de référence identique sous Node et Chromium mobile (`af2de690`).
+- Lighthouse mobile (serveur local, sans compression) : performance 94, accessibilité 100, 323 Ko au premier rendu, aucune 404.
+- Aucun `TODO`, `FIXME`, `console.log` ; aucun chemin absolu ; aucune fonction interdite dans `physique.js`.
+
+### Duel réel sur Supabase (projet mot-a-mot, 2026-11-02)
+
+Deux clients Node exécutent les vrais `reseau.js`, `reconnexion.js`, `partie.js` et `bot.js`. Un navigateur joue face à un client Node.
+
+- **Critère 2** : duel complet hôte contre invité, scores 7–3 et empreinte `7b34e3c6` identiques des deux côtés.
+- **Critère 3** :
+  - L'invité est coupé à 14 coups puis relancé. Il garde la même identité anonyme, lit le journal (14 coups), se resynchronise et finit identique.
+  - Côté navigateur, l'hôte est rechargé (`?p=CODE`) après 6 coups. Il reprend la partie et finit à 0–5 avec l'empreinte `50b08a9b`, comme l'invité.
+- **Critère 4** : un troisième client anonyme ne voit ni la partie ni les coups, son insertion de coup est refusée par RLS, et `rejoindre` répond « Salon plein ». Un code inconnu répond « Salon inexistant ».
+
+## Non vérifié
+
+- Critère 5 sur de vrais iPhone et Android : à faire avec `tests/determinisme.html`.
+- Duel entre deux navigateurs pilotés à la main : le parcours a été couvert par un navigateur face à un client Node, pas par deux navigateurs.

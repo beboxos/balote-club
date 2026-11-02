@@ -1,0 +1,154 @@
+import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_JS } from '../config.js';
+
+// supabase-js est chargé à la demande : le solo ne télécharge rien de plus.
+let client = null;
+
+export function enLigneDisponible() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+// Stockage de session explicite : la même identité anonyme survit au rechargement.
+// Si le stockage est bloqué, supabase-js retombe sur une session en mémoire.
+function stockageSession() {
+  try { return globalThis.localStorage || undefined; } catch { return undefined; }
+}
+
+async function sb() {
+  if (client) return client;
+  const { createClient } = await import(SUPABASE_JS);
+  client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, storageKey: 'balote.auth', storage: stockageSession() },
+    realtime: { params: { eventsPerSecond: 10 } },
+  });
+  return client;
+}
+
+function verifier({ data, error }) {
+  if (error) throw new Error(error.message || 'Erreur réseau');
+  return data;
+}
+
+// Auth anonyme : la session est réutilisée après rechargement de l'onglet.
+export async function connexion() {
+  const c = await sb();
+  const { data } = await c.auth.getSession();
+  if (data.session?.user) return data.session.user.id;
+  const res = verifier(await c.auth.signInAnonymously());
+  return res.user.id;
+}
+
+const unique = (d) => (Array.isArray(d) ? d[0] : d);
+
+export async function creerSalon() {
+  const c = await sb();
+  return unique(verifier(await c.rpc('creer_partie')));
+}
+
+export async function rejoindre(code) {
+  const c = await sb();
+  return unique(verifier(await c.rpc('rejoindre_partie', { p_code: code.toUpperCase() })));
+}
+
+export async function chargerPartie(code) {
+  const c = await sb();
+  return verifier(await c.from('parties').select('*').eq('code', code.toUpperCase()).maybeSingle());
+}
+
+export async function chargerCoups(partieId, depuis = 0) {
+  const c = await sb();
+  return verifier(await c.from('coups')
+    .select('seq, angle, puissance, auteur')
+    .eq('partie_id', partieId)
+    .gte('seq', depuis)
+    .order('seq', { ascending: true }));
+}
+
+// Transport d'une partie : broadcast Realtime `partie:<id>` (coup, abandon, profil),
+// doublé d'un abonnement aux insertions de `coups` (journal = source de vérité).
+export class Reseau {
+  constructor(partie, uid, { onCoup, onAbandon, onProfil, onArrivee, onEtat } = {}) {
+    this.partie = partie;
+    this.uid = uid;
+    this.cb = { onCoup, onAbandon, onProfil, onArrivee, onEtat };
+    this.canal = null;
+    this.enAttente = [];
+    this.ferme = false;
+  }
+
+  async ouvrir() {
+    const c = await sb();
+    if (this.canal) await c.removeChannel(this.canal);
+    const id = this.partie.id;
+    this.canal = c.channel('partie:' + id, { config: { broadcast: { self: false } } })
+      .on('broadcast', { event: 'coup' }, ({ payload }) => this.cb.onCoup?.(payload))
+      .on('broadcast', { event: 'abandon' }, ({ payload }) => this.cb.onAbandon?.(payload))
+      .on('broadcast', { event: 'profil' }, ({ payload }) => this.cb.onProfil?.(payload))
+      .on('broadcast', { event: 'arrivee' }, ({ payload }) => this.cb.onArrivee?.(payload))
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'coups', filter: 'partie_id=eq.' + id },
+        ({ new: ligne }) => { if (ligne.auteur !== this.uid) this.cb.onCoup?.(ligne); })
+      .subscribe((statut) => this.cb.onEtat?.(statut));
+    return this.canal;
+  }
+
+  diffuser(event, payload) {
+    if (!this.canal) return;
+    this.canal.send({ type: 'broadcast', event, payload }).catch(() => { /* rattrapé par le journal */ });
+  }
+
+  // Journalise puis diffuse. En cas d'échec, le coup reste en file et sera renvoyé.
+  async envoyerCoup(coup) {
+    this.enAttente.push(coup);
+    await this.vider();
+  }
+
+  async vider() {
+    const c = await sb();
+    while (this.enAttente.length) {
+      const coup = this.enAttente[0];
+      const { error } = await c.from('coups').insert({
+        partie_id: this.partie.id, auteur: this.uid,
+        seq: coup.seq, angle: coup.angle, puissance: coup.puissance,
+      });
+      // 23505 : déjà journalisé (renvoi après coupure) — on considère le coup livré.
+      if (error && error.code !== '23505') {
+        this.derniereErreur = error;
+        return false;
+      }
+      this.enAttente.shift();
+      this.diffuser('coup', coup);
+    }
+    return true;
+  }
+
+  envoyerProfil(profil) { this.diffuser('profil', profil); }
+  annoncerArrivee(profil) { this.diffuser('arrivee', profil); }
+
+  async abandonner() {
+    this.diffuser('abandon', { uid: this.uid });
+    await this.cloturer('abandon');
+  }
+
+  async cloturer(statut) {
+    try {
+      const c = await sb();
+      await c.rpc('cloturer_partie', { p_id: this.partie.id, p_statut: statut });
+    } catch { /* statut indicatif seulement */ }
+  }
+
+  async quitter() {
+    this.ferme = true;
+    if (this.canal) {
+      const c = await sb();
+      await c.removeChannel(this.canal);
+      this.canal = null;
+    }
+  }
+}
+
+// Point d'accroche anti-triche v2 : re-simulation serveur via une Edge Function
+// `valider_partie` (non implémentée en v1). Appelée en fin de partie, sans effet bloquant.
+export async function demanderValidation(partieId) {
+  void partieId;
+  return { valide: null };
+}

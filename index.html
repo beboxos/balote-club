@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14100e">
+  <meta name="description" content="Balote Club — pétanque tour par tour, en solo contre le club ou en duel à distance.">
+  <title>Balote Club</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2314100e'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23c96a3f'/%3E%3Ccircle cx='13' cy='13' r='3' fill='%23f0a17c'/%3E%3C/svg%3E">
+  <link rel="preload" href="assets/fonts/instrument-serif-latin-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/inter-tight-latin-600.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" as="image" type="image/avif"
+        imagesrcset="assets/img/hero-720.avif 720w, assets/img/hero-1080.avif 1080w, assets/img/hero-1440.avif 1440w"
+        imagesizes="(min-width: 560px) 480px, 100vw" fetchpriority="high">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main id="app" class="app">
+
+    <!-- Menu -->
+    <section id="ecran-menu" class="ecran ecran--menu est-actif" aria-labelledby="titre-menu">
+      <picture class="hero">
+        <source type="image/avif" srcset="assets/img/hero-720.avif 720w, assets/img/hero-1080.avif 1080w, assets/img/hero-1440.avif 1440w" sizes="(min-width: 560px) 480px, 100vw">
+        <source type="image/webp" srcset="assets/img/hero-720.webp 720w, assets/img/hero-1080.webp 1080w, assets/img/hero-1440.webp 1440w" sizes="(min-width: 560px) 480px, 100vw">
+        <img src="assets/img/hero-1080.webp" width="1080" height="1350" alt="Trois boules et un cochonnet sur l'argile, en lumière rasante de fin de journée" loading="eager" fetchpriority="high" decoding="async">
+      </picture>
+      <div class="menu-corps">
+        <p class="surtitre">Fondé en 2026 · Terrain n°1</p>
+        <h1 id="titre-menu" class="titre">Balote <em>Club</em></h1>
+        <p class="accroche">Tirez vers l'arrière, relâchez. Le plus près du cochonnet marque.</p>
+
+        <div class="profil">
+          <button type="button" class="avatar-btn" id="btn-avatar" aria-label="Changer d'avatar">
+            <img id="avatar-moi" src="assets/avatars/01.webp" width="48" height="48" alt="">
+          </button>
+          <label class="champ champ--pseudo">
+            <span class="sr">Pseudo</span>
+            <input id="pseudo" type="text" maxlength="14" autocomplete="nickname" spellcheck="false" placeholder="Votre pseudo">
+          </label>
+          <button type="button" class="icone-btn" id="btn-son" aria-pressed="true" aria-label="Son activé">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path class="ic-hp" d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="ic-on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/><path class="ic-off" d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+
+        <div class="actions">
+          <div class="segment" role="radiogroup" aria-label="Niveau du bot">
+            <button type="button" role="radio" aria-checked="false" data-niveau="0">Facile</button>
+            <button type="button" role="radio" aria-checked="true" data-niveau="1">Club</button>
+            <button type="button" role="radio" aria-checked="false" data-niveau="2">Maître</button>
+          </div>
+          <button type="button" class="btn btn--plein" id="btn-solo">Jouer contre le club</button>
+          <div class="rangee">
+            <button type="button" class="btn" id="btn-creer">Créer un duel</button>
+            <button type="button" class="btn" id="btn-rejoindre">Rejoindre</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Rejoindre -->
+    <section id="ecran-rejoindre" class="ecran ecran--salon" aria-labelledby="titre-rejoindre" hidden>
+      <div class="fond-ambiance" aria-hidden="true"></div>
+      <div class="salon-corps">
+        <p class="surtitre">Duel à distance</p>
+        <h2 id="titre-rejoindre" class="titre titre--m">Entrer le code</h2>
+        <form id="form-code" class="form-code" autocomplete="off">
+          <label class="champ champ--code">
+            <span class="sr">Code du salon</span>
+            <input id="saisie-code" type="text" inputmode="text" maxlength="5" pattern="[A-Za-z0-9]{5}" autocapitalize="characters" spellcheck="false" placeholder="A1B2C" required>
+          </label>
+          <p id="erreur-code" class="message message--erreur" role="alert"></p>
+          <button type="submit" class="btn btn--plein">Rejoindre la partie</button>
+        </form>
+        <button type="button" class="btn btn--fantome" data-retour>Retour</button>
+      </div>
+    </section>
+
+    <!-- Salon -->
+    <section id="ecran-salon" class="ecran ecran--salon" aria-labelledby="titre-salon" hidden>
+      <div class="fond-ambiance" aria-hidden="true"></div>
+      <div class="salon-corps">
+        <p class="surtitre">Salon privé</p>
+        <h2 id="titre-salon" class="titre titre--m">Code du duel</h2>
+        <p id="code-salon" class="code" aria-live="polite">-----</p>
+        <button type="button" class="btn" id="btn-copier">Copier le lien</button>
+        <div class="vs">
+          <div class="joueur joueur--rouge">
+            <img id="salon-avatar-0" src="assets/avatars/01.webp" width="72" height="72" alt="">
+            <span id="salon-nom-0">Vous</span>
+          </div>
+          <span class="vs-sep">contre</span>
+          <div class="joueur joueur--bleu">
+            <img id="salon-avatar-1" src="assets/avatars/01.webp" width="72" height="72" alt="" class="est-vide">
+            <span id="salon-nom-1">En attente</span>
+          </div>
+        </div>
+        <p id="statut-salon" class="message" aria-live="polite">En attente d'un adversaire…</p>
+        <button type="button" class="btn btn--fantome" id="btn-annuler-salon">Annuler</button>
+      </div>
+    </section>
+
+    <!-- Jeu -->
+    <section id="ecran-jeu" class="ecran ecran--jeu" aria-label="Partie en cours" hidden>
+      <div class="scene">
+        <canvas id="terrain" tabindex="0" aria-label="Terrain. Glissez vers l'arrière puis relâchez pour lancer. Au clavier : flèches gauche et droite pour viser, haut et bas pour doser, espace pour lancer."></canvas>
+        <header class="hud">
+          <div class="chip chip--rouge">
+            <img id="hud-avatar-0" src="assets/avatars/01.webp" width="32" height="32" alt="">
+            <div class="chip-txt"><span id="hud-nom-0" class="chip-nom">Vous</span><span class="chip-boules" id="hud-boules-0" aria-label="Boules restantes">4</span></div>
+            <strong id="hud-score-0" class="chip-score">0</strong>
+          </div>
+          <p class="hud-manche" id="hud-manche">Mène 1</p>
+          <div class="chip chip--bleu">
+            <strong id="hud-score-1" class="chip-score">0</strong>
+            <div class="chip-txt"><span id="hud-nom-1" class="chip-nom">Club</span><span class="chip-boules" id="hud-boules-1" aria-label="Boules restantes">4</span></div>
+            <img id="hud-avatar-1" src="assets/avatars/02.webp" width="32" height="32" alt="">
+          </div>
+        </header>
+        <p id="score-live" class="sr" aria-live="polite"></p>
+        <div class="bas">
+          <p id="bandeau" class="bandeau" aria-live="assertive">À vous de jouer</p>
+          <button type="button" class="icone-btn icone-btn--sombre" id="btn-quitter" aria-label="Quitter la partie">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Fin -->
+    <section id="ecran-fin" class="ecran ecran--fin" aria-labelledby="titre-fin" hidden>
+      <div class="fond-ambiance" aria-hidden="true"></div>
+      <div class="salon-corps">
+        <p class="surtitre" id="fin-surtitre">Fin de partie</p>
+        <h2 id="titre-fin" class="titre">Victoire</h2>
+        <div class="vs vs--fin">
+          <div class="joueur joueur--rouge">
+            <img id="fin-avatar-0" src="assets/avatars/01.webp" width="72" height="72" alt="">
+            <span id="fin-nom-0">Vous</span>
+            <strong id="fin-score-0" class="score-fin">5</strong>
+          </div>
+          <span class="vs-sep">à</span>
+          <div class="joueur joueur--bleu">
+            <img id="fin-avatar-1" src="assets/avatars/02.webp" width="72" height="72" alt="">
+            <span id="fin-nom-1">Club</span>
+            <strong id="fin-score-1" class="score-fin">3</strong>
+          </div>
+        </div>
+        <p id="fin-detail" class="message"></p>
+        <button type="button" class="btn btn--plein" id="btn-rejouer">Rejouer</button>
+        <button type="button" class="btn btn--fantome" data-retour>Menu</button>
+      </div>
+    </section>
+
+    <!-- Chargement -->
+    <div id="chargement" class="chargement" role="status" aria-live="polite">
+      <p class="titre titre--m">Balote <em>Club</em></p>
+      <div class="jauge" aria-hidden="true"><span id="jauge-remplie"></span></div>
+      <p id="chargement-txt" class="message">Chargement…</p>
+      <button type="button" class="btn" id="btn-reessayer" hidden>Réessayer</button>
+    </div>
+  </main>
+
+  <dialog id="dialogue-avatar" class="dialogue" aria-labelledby="titre-avatar">
+    <h2 id="titre-avatar" class="titre titre--s">Choisir un portrait</h2>
+    <div class="grille-avatars" id="grille-avatars"></div>
+    <button type="button" class="btn btn--fantome" id="btn-fermer-avatar">Fermer</button>
+  </dialog>
+
+  <dialog id="dialogue-quitter" class="dialogue" aria-labelledby="titre-quitter">
+    <h2 id="titre-quitter" class="titre titre--s">Quitter la partie ?</h2>
+    <p class="message" id="quitter-detail">La partie en cours sera perdue.</p>
+    <div class="rangee">
+      <button type="button" class="btn" id="btn-quitter-non">Continuer</button>
+      <button type="button" class="btn btn--plein" id="btn-quitter-oui">Quitter</button>
+    </div>
+  </dialog>
+</body>
+</html>

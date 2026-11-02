@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Balote Club — test de déterminisme</title>
+  <style>
+    body { margin: 0; padding: 24px 16px; background: #14100e; color: #f4ece2; font: 16px/1.5 system-ui, sans-serif; }
+    h1 { font-size: 1.25rem; margin: 0 0 12px; }
+    .empreinte { font: 600 2.5rem/1.1 ui-monospace, Menlo, monospace; color: #ff7a45; letter-spacing: 0.05em; margin: 16px 0; }
+    dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+    dt { color: #b9aa9c; }
+    p { color: #b9aa9c; max-width: 40ch; }
+  </style>
+</head>
+<body>
+  <h1>Test de déterminisme</h1>
+  <p>Ouvrez cette page sur chaque appareil (iPhone Safari, Android Chrome) et comparez l'empreinte : elle doit être identique.</p>
+  <p class="empreinte" id="empreinte">…</p>
+  <dl>
+    <dt>Scores</dt><dd id="scores">…</dd>
+    <dt>Mène</dt><dd id="mene">…</dd>
+    <dt>Navigateur</dt><dd id="ua">…</dd>
+  </dl>
+  <script type="module">
+    import { executerReference } from './scenario.js';
+    const r = executerReference();
+    document.getElementById('empreinte').textContent = r.empreinte;
+    document.getElementById('scores').textContent = r.scores.join(' – ') + (r.fini ? ' (partie finie)' : '');
+    document.getElementById('mene').textContent = r.mene;
+    document.getElementById('ua').textContent = navigator.userAgent;
+  </script>
+</body>
+</html>
