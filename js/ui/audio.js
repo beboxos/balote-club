@@ -36,22 +36,56 @@ class Audio {
     } catch { this.ctx = null; }
   }
 
-  async precharger() {
-    await Promise.all(SONS.map(async (nom) => {
+  // Téléchargement anticipé : les octets arrivent dès l'ouverture de la page, le décodage attend
+  // le premier geste (le contexte audio n'existe qu'alors).
+  prefetch() {
+    this.bruts ||= new Map();
+    for (const nom of SONS) {
+      if (this.bruts.has(nom)) continue;
+      const p = fetch(`assets/audio/${nom}.${this.ext}`).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+      this.bruts.set(nom, p);
+    }
+  }
+
+  // Un effet qui n'a pas pu être chargé (réseau mobile) est retenté : 3 essais espacés, puis à la demande.
+  async chargerUn(nom) {
+    if (this.tampons.has(nom) || this.enCours?.has(nom) || !this.ctx) return;
+    (this.enCours ||= new Set()).add(nom);
+    for (let essai = 0; essai < 3 && !this.tampons.has(nom); essai++) {
       try {
-        const r = await fetch(`assets/audio/${nom}.${this.ext}`);
-        if (!r.ok) return;
-        const buf = await r.arrayBuffer();
-        const t = await new Promise((ok, ko) => this.ctx.decodeAudioData(buf, ok, ko));
-        this.tampons.set(nom, t);
-      } catch { /* son absent : on reste muet pour celui-ci */ }
-    }));
+        // Octets déjà téléchargés d'avance, sinon téléchargement maintenant (retentative).
+        let buf = essai === 0 ? await this.bruts?.get(nom) : null;
+        if (!buf) {
+          const r = await fetch(`assets/audio/${nom}.${this.ext}`);
+          buf = r.ok ? await r.arrayBuffer() : null;
+        }
+        if (buf) this.tampons.set(nom, await new Promise((ok, ko) => this.ctx.decodeAudioData(buf.slice(0), ok, ko)));
+      } catch { /* on réessaie */ }
+      if (!this.tampons.has(nom)) await new Promise((ok) => setTimeout(ok, 800 * (essai + 1)));
+    }
+    this.enCours.delete(nom);
+  }
+
+  async precharger() {
+    await Promise.all(SONS.map((nom) => this.chargerUn(nom)));
+  }
+
+  // État pour le diagnostic des réglages.
+  diagnostic() {
+    return {
+      horloge: this.ctx ? this.ctx.state : 'absente',
+      charges: this.tampons.size,
+      total: SONS.length,
+      manquants: SONS.filter((n) => !this.tampons.has(n)),
+      format: this.ext,
+      actif: this.actif,
+    };
   }
 
   jouer(nom, { volume = 1, vitesse = 1 } = {}) {
     if (!this.actif || !this.ctx || this.ctx.state !== 'running') return;
     const t = this.tampons.get(nom);
-    if (!t) return;
+    if (!t) { this.chargerUn(nom); return; }
     const src = this.ctx.createBufferSource();
     src.buffer = t;
     src.playbackRate.value = vitesse;
@@ -143,3 +177,4 @@ class Audio {
 }
 
 export const audio = new Audio();
+audio.prefetch();

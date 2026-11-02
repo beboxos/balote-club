@@ -724,6 +724,22 @@ function brancherInterface() {
   });
   musique.surChangement = (p) => { $('piste-en-cours').textContent = `En cours : ${p.nom}`; };
 
+  // Test du son : geste utilisateur (débloque l'audio), un atterrissage et un choc, puis l'état du moteur audio.
+  $('btn-test-son').addEventListener('click', () => {
+    audio.deverrouiller();
+    const dire = () => {
+      const d = audio.diagnostic();
+      $('diag-son').textContent = d.horloge === 'running'
+        ? `Audio actif, ${d.charges}/${d.total} effets chargés (${d.format})${d.actif ? '' : ' ; son coupé par le bouton haut-parleur'}${d.manquants.length ? ' ; manquants : ' + d.manquants.join(', ') : ''}.`
+        : `Audio bloqué par le navigateur (${d.horloge}). Touchez l'écran puis réessayez.`;
+    };
+    setTimeout(() => {
+      audio.atterrir(200, prefs.sol, false);
+      setTimeout(() => audio.jouer('impact-boule', { volume: 0.8 }), 350);
+      dire();
+    }, 300);
+  });
+
   $('btn-reglages').addEventListener('click', () => $('dialogue-reglages').showModal());
   $('btn-fermer-reglages').addEventListener('click', () => $('dialogue-reglages').close());
 

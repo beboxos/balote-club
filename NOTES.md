@@ -104,6 +104,12 @@ La référence de `tests/determinisme.html` change avec la nouvelle physique : v
 - **Mise en œuvre** : la `Camera` porte une vue (`z`, `tx`, `ty`) appliquée dans `projeter` ; tout ce qui est dessiné via la caméra (boules, joueurs, sprites, ombres) reste net. Le décor pré-rendu est étiré pendant le geste puis repeint net 140 ms après (`Rendu.planifierDecor`). Physique et duel inchangés.
 - **Régression corrigée** : l'import de `avatarSrc` dans `ecrans.js` (ajout des profils) empêchait de lancer une partie ; livrée par erreur aux commits des profils et corrigée dans celui-ci. Les tests Node ne couvrent pas l'interface : toujours lancer une partie dans le navigateur avant de publier.
 
+## Retour de jeu n° 10 : sons absents en ligne
+
+- **Constat** : « le son des boules marche en local mais pas sur Pages (la musique oui) ». Sur le site en ligne, dans le navigateur intégré, tout marchait (8/8 effets chargés, crête audio 0,43 sur un lancer) : pas de bug de code reproductible. Cause probable côté appareil : les effets (fichiers) n'étaient téléchargés qu'après le premier toucher, sans nouvelle tentative en cas d'échec réseau, alors que la musique est synthétisée sans fichier et passe toujours.
+- **Correctifs** : `audio.prefetch()` télécharge les 8 effets dès l'ouverture de la page ; le décodage suit le premier geste ; trois essais espacés puis nouvelle tentative à la demande si un effet manque (`chargerUn`). Réglages : bouton « Tester le son » avec diagnostic (horloge audio, effets chargés, format, son coupé).
+- Si le problème persiste sur un appareil : ouvrir Réglages, « Tester le son », lire le diagnostic ; vider le cache du site (modules mélangés ancienne/nouvelle version pendant ≈ 10 min après une mise en ligne).
+
 ## Vérifié
 
 - Solo complet (navigateur, 375 × 667) : partie menée jusqu'à l'écran de fin, aucune erreur console.
