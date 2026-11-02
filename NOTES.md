@@ -56,11 +56,11 @@ La référence de `tests/determinisme.html` change avec la nouvelle physique : v
 
 ## Retour de jeu n° 4 : terrains, cailloux, cochonnet lancé
 
-- **Le terrain roulait trop peu** : le roulement après l'atterrissage est maintenant réglé par un sol (`SOLS` dans `physique.js`). Lisse : frottement 260, rebond 0,5. Terre (défaut) : 380 et 0,45, soit environ 2,3 fois plus de roulement qu'avant. Gravier : 620 et 0,36, proche de l'ancien comportement. Le choix est dans le menu (solo et deux joueurs). Le duel en ligne reste sur « terre » : le sol n'est pas dans le schéma Supabase.
+- **Le terrain roulait trop peu** : le roulement après l'atterrissage est maintenant réglé par un sol (`SOLS` dans `physique.js`). Lisse et Terre (défaut) : frottement 260, rebond 0,5 (le réglage validé en jeu, environ 3,6 fois plus de roulement qu'avant) ; seuls les cailloux les distinguent. Gravier : 380 et 0,45. Le choix est dans le menu (solo et deux joueurs). Le duel en ligne reste sur « terre » : le sol n'est pas dans le schéma Supabase.
 - **Cailloux** : semés à chaque mène depuis la graine (`semerCailloux`) : 0 sur lisse, 5 sur terre, 12 sur gravier. Un objet qui roule sur un caillou est dévié de 3 à 9° du côté opposé, freiné de 5 %, une seule fois par caillou et par déplacement. Même résultat sur les deux appareils (arithmétique simple, masque de bits dans `o.cai`).
 - **Cochonnet** : le premier joueur de chaque mène le lance (c'est un coup du journal, `phase === 'cochonnet'`), puis lance aussi la première boule. Le geste 0..1 est étalé sur 330 à 450 unités : ni trop près, ni trop loin, l'angle restant libre. Sorti du terrain, il est relancé, et posé d'office après deux lancers nuls.
 - **Taille du cochonnet** : rendu réduit de 30 % (facteur 2,2 → 1,54). Le rayon physique ne change pas.
-- Le portée n'est plus une constante : `portee(sol)`. Empreinte de référence recalculée : `63f0c7d5`, 2–5 à la mène 6.
+- Le portée n'est plus une constante : `portee(sol)`. Empreinte de référence recalculée : `0f4af409`, 5–3 à la mène 6.
 - Non vérifié : ressenti réel du roulement et des cailloux au toucher, équilibrage du bot sur les nouveaux sols, duel entre deux navigateurs avec le lancer du cochonnet.
 
 ## Vérifié

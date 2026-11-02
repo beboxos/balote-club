@@ -46,7 +46,8 @@ const roule = (sol) => {
   while (!step(ec));
   return yChute - ec.objets[bc].y;
 };
-assert.ok(roule(SOLS.lisse) > roule(SOLS.terre) && roule(SOLS.terre) > roule(SOLS.gravier), 'ordre de roulement lisse > terre > gravier');
+assert.ok(roule(SOLS.terre) > roule(SOLS.gravier), 'la terre roule plus que le gravier');
+assert.ok(Math.abs(roule(SOLS.lisse) - roule(SOLS.terre)) < 1e-9, 'lisse et terre roulent pareil (seuls les cailloux diffèrent)');
 
 // Un caillou dévie une boule qui roule dessus, une seule fois, du côté opposé.
 const sans = creerEtat({ x: 30, y: 30 });

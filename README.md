@@ -72,7 +72,7 @@ node tests/duel.test.mjs       # deux clients en mémoire + reprise depuis le jo
 
 **Déterminisme iOS / Android (critère 5)** : ouvrir `tests/determinisme.html` sur chaque
 appareil et comparer l'empreinte affichée. Valeur de référence (Node 24, Chromium) :
-`63f0c7d5`, scores 2–5 à la mène 6.
+`0f4af409`, scores 5–3 à la mène 6.
 
 ## Assets
 

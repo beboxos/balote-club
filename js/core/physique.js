@@ -19,8 +19,8 @@ export const PORTEE_AIR = V_LANCER * T_VOL;
 // conservée à l'atterrissage ; cailloux : nombre de petits cailloux semés à chaque mène.
 export const SOLS = {
   lisse: { id: 'lisse', nom: 'Lisse', frottement: 260, impact: 0.5, cailloux: 0 },
-  terre: { id: 'terre', nom: 'Terre', frottement: 380, impact: 0.45, cailloux: 5 },
-  gravier: { id: 'gravier', nom: 'Gravier', frottement: 620, impact: 0.36, cailloux: 12 },
+  terre: { id: 'terre', nom: 'Terre', frottement: 260, impact: 0.5, cailloux: 5 },
+  gravier: { id: 'gravier', nom: 'Gravier', frottement: 380, impact: 0.45, cailloux: 12 },
 };
 export const SOL_DEFAUT = 'terre';
 
