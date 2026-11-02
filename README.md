@@ -1,7 +1,7 @@
 # Balote Club
 
-Pétanque tour par tour, mobile d'abord, vue 3D en hauteur, lancer en cloche : solo contre le club
-(3 niveaux, 3 ou 6 boules) ou duel à distance (3 boules). Site 100 % statique (HTML, CSS, modules ES natifs), hébergé sur GitHub Pages ;
+Pétanque tour par tour, mobile d'abord, vue 3D isométrique, lancer en cloche : solo contre le club
+(3 niveaux, 3 ou 6 boules) ou duel à distance (3 boules), ou à deux sur le même téléphone. Site 100 % statique (HTML, CSS, modules ES natifs), hébergé sur GitHub Pages ;
 le duel passe par Supabase (auth anonyme, Postgres, Realtime).
 
 ## Lancer en local
@@ -55,7 +55,7 @@ Tous les chemins sont relatifs, le site fonctionne donc aussi sous `https://<use
 | `js/core/bot.js` | Bot : simule des coups candidats puis ajoute une erreur gaussienne selon le niveau |
 | `js/net/reseau.js` | Auth anonyme, salons, journal `coups`, broadcast `partie:<id>` |
 | `js/net/reconnexion.js` | Réabonnement et rattrapage des coups après retour d'onglet ou coupure |
-| `js/ui/vue3d.js` | Caméra en perspective, décor (ciel, arbres, piste), ombres, viseur au sol |
+| `js/ui/vue3d.js` | Caméra en hauteur pivotée de 35°, décor (herbe, haies, arbres, piste), volumes, ombres, courbe du lancer |
 | `js/ui/perso.js` | Joueurs en volumes simples, vus de dos, poses du lancer |
 | `js/ui/matieres.js` | Textures (terre battue), sprites de boules, particules et traces |
 | `js/ui/rendu.js` | Canvas, DPR ≤ 2, gestes et clavier, animation du lancer |

@@ -1,7 +1,7 @@
-import { TERRAIN, LANCER, RAYON, sinCos, distance } from '../core/physique.js';
+import { TERRAIN, LANCER, RAYON, PORTEE_AIR, sinCos, distance } from '../core/physique.js';
 import { meilleures } from '../core/partie.js';
 import { dessinerTerrain, spriteBoule, Effets, viderCaches } from './matieres.js';
-import { Camera, peindreDecor, ombreSol, cochonnet, guide, jauge, GROSSISSEMENT } from './vue3d.js';
+import { Camera, peindreDecor, ombreSol, anneauSol, cochonnet, trajectoire, jauge, GROSSISSEMENT } from './vue3d.js';
 import { dessinerPerso, positionRepos, POSTE } from './perso.js';
 
 const DRAG_MAX = 150;     // unités du terrain pour la puissance pleine
@@ -116,10 +116,15 @@ export class Rendu {
     c.addEventListener('pointermove', (e) => {
       if (!this.drag || e.pointerId !== this.drag.id) return;
       const p = this.coord(e.clientX, e.clientY);
-      const dx = (this.drag.depart.x - p.x) / this.unite;
-      const dy = (this.drag.depart.y - p.y) / this.unite / this.cam.ratio;
-      const long = Math.sqrt(dx * dx + dy * dy);
+      // Glissement d'écran (arrière = vers soi) → direction du terrain, selon la rotation de la vue.
+      const sx = this.drag.depart.x - p.x;
+      const sy = this.drag.depart.y - p.y;
+      const long = Math.sqrt(sx * sx + sy * sy) / this.unite;
       if (long < 4) { this.visee = null; return; }
+      const { ex, ey } = this.cam.base();
+      const det = ex.x * ey.y - ey.x * ex.y;
+      const dx = (sx * ey.y - ey.x * sy) / det;
+      const dy = (ex.x * sy - sx * ex.y) / det;
       const cd = Math.round((Math.atan2(dy, dx) * 18000) / Math.PI);
       const avant = this.visee?.p ?? 0;
       this.visee = { cd: (cd + 36000) % 36000, p: Math.min(1, long / DRAG_MAX) };
@@ -208,7 +213,7 @@ export class Rendu {
       const k = adoucir(Math.min(1, (ph - RELACHE - 0.12) / 0.7));
       return { bras: lerp(1.0, repos.bras, k), penche: lerp(6, 0, k), pas: lerp(2.4, 0, k) };
     }
-    if (this.visee && this.peutViser() && equipe === this.partie.cote) {
+    if (this.visee && this.peutViser() && this.partie.estJoueurLocal(equipe)) {
       return { bras: -0.3 - this.visee.p * 0.6, penche: -4 * this.visee.p, pas: 0 };
     }
     return repos;
@@ -274,9 +279,8 @@ export class Rendu {
     if (partie.vue) this.dessinerPoints(ctx, etat);
 
     if (this.visee && this.peutViser()) {
-      const { s, c } = sinCos(this.visee.cd);
       jauge(ctx, cam, LANCER.x, LANCER.y, this.visee.p);
-      guide(ctx, cam, LANCER.x, LANCER.y, c, s);
+      trajectoire(ctx, cam, this.courbe(this.visee.cd, this.visee.p), t);
     }
 
     // Joueurs : celui qui lance au cercle, l'autre à côté ; ils glissent de l'un à l'autre.
@@ -317,6 +321,23 @@ export class Rendu {
     this.effets.dessinerParticules(ctx, cam);
   }
 
+  // Trajectoire prévue (sans la dispersion du lancer) : de la main au point de chute.
+  courbe(cd, p) {
+    const { s, c } = sinCos(cd);
+    const portee = PORTEE_AIR * p;
+    const arc = 20 + 120 * Math.sqrt(p);
+    const pts = [];
+    for (let i = 0; i <= 24; i++) {
+      const k = i / 24;
+      pts.push({
+        x: LANCER.x + c * portee * k,
+        y: LANCER.y + s * portee * k,
+        h: RAYON + (MAIN_LACHER - RAYON) * (1 - k) + arc * 4 * k * (1 - k),
+      });
+    }
+    return pts;
+  }
+
   boule(ctx, x, y, r, equipe, index, alpha) {
     const c = this.cam.projeter(x, y, r);
     this.spriteAt(ctx, c.x, c.y, r * c.k * GROSSISSEMENT, equipe, index, alpha);
@@ -346,7 +367,7 @@ export class Rendu {
     return {
       equipe: m.tour,
       index: m.etat.objets.length,
-      alpha: m.tour === p.cote ? 1 : 0.7,
+      alpha: p.estJoueurLocal(m.tour) ? 1 : 0.7,
     };
   }
 
@@ -356,20 +377,11 @@ export class Rendu {
     if (best[0] === best[1]) return;
     const g = best[0] < best[1] ? 0 : 1;
     const jack = etat.objets[0];
-    const cam = this.cam;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,150,95,.95)';
     for (let i = 1; i < etat.objets.length; i++) {
       const o = etat.objets[i];
       if (o.vivant && o.equipe === g && distance(o, jack) < best[1 - g]) {
-        const c = cam.projeter(o.x, o.y, 0);
-        const ry = Math.abs(cam.projeter(o.x, o.y + o.r + 5, 0).y - cam.projeter(o.x, o.y - o.r - 5, 0).y) / 2;
-        ctx.lineWidth = Math.max(1.5, c.k * 1.4);
-        ctx.beginPath();
-        ctx.ellipse(c.x, c.y, (o.r + 5) * c.k * GROSSISSEMENT, ry * GROSSISSEMENT, 0, 0, Math.PI * 2);
-        ctx.stroke();
+        anneauSol(ctx, this.cam, o.x, o.y, (o.r + 5) * GROSSISSEMENT, 'rgba(255,150,95,.95)', 3);
       }
     }
-    ctx.restore();
   }
 }

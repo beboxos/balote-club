@@ -1,9 +1,10 @@
 // Joueurs en volumes simples (style bloc), vus de dos. Dessin procédural, aucune image.
 // Toutes les positions sont en unités du terrain, projetées par la caméra.
 import { LANCER } from '../core/physique.js';
+import { boite, ombreSol } from './vue3d.js';
 
 // Échelle des joueurs par rapport aux boules (1 = taille réelle du jeu).
-const S = 1.0;
+const S = 1.3;
 const EPAULE_Z = 60;
 const LONG_BRAS = 27;
 
@@ -12,36 +13,11 @@ const STYLES = [
   { maillot: '#3f6082', maillotCl: '#5f86ad', short: '#3a3228', casquette: '#2b4561', peau: '#c98d66', cheveux: '#17120f' },
 ];
 
-function nuancer(hex, f) {
-  const n = parseInt(hex.slice(1), 16);
-  const c = (v) => Math.max(0, Math.min(255, Math.round(v * f)));
-  return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
-}
-
-function quad(ctx, a, b, c, d, couleur) {
-  ctx.fillStyle = couleur;
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y);
-  ctx.closePath();
-  ctx.fill();
-}
-
-// Parallélépipède vu de la caméra (derrière et au-dessus) : côté visible, dos, dessus.
-function boite(ctx, cam, x, y, z, w, d, h, couleur) {
-  const P = (dx, dy, dz) => cam.projeter(x + dx, y + dy, z + dz);
-  const x0 = -w / 2; const x1 = w / 2; const y0 = -d / 2; const y1 = d / 2;
-  // côté gauche / droit selon la position par rapport à l'axe de la caméra
-  if (x + x1 < LANCER.x) quad(ctx, P(x1, y0, 0), P(x1, y1, 0), P(x1, y1, h), P(x1, y0, h), nuancer(couleur, 0.78));
-  if (x + x0 > LANCER.x) quad(ctx, P(x0, y0, 0), P(x0, y1, 0), P(x0, y1, h), P(x0, y0, h), nuancer(couleur, 0.78));
-  quad(ctx, P(x0, y1, 0), P(x1, y1, 0), P(x1, y1, h), P(x0, y1, h), couleur);
-  quad(ctx, P(x0, y0, h), P(x1, y0, h), P(x1, y1, h), P(x0, y1, h), nuancer(couleur, 1.18));
-}
-
 function membre(ctx, cam, a, b, epaisseur, couleur, couleurBout) {
   const pa = cam.projeter(a.x, a.y, a.z);
   const pb = cam.projeter(b.x, b.y, b.z);
   ctx.lineCap = 'round';
-  ctx.strokeStyle = nuancer(couleur, 0.8);
+  ctx.strokeStyle = 'rgba(0,0,0,.28)';
   ctx.lineWidth = epaisseur * pa.k * 1.12;
   ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
   ctx.strokeStyle = couleur;
@@ -62,12 +38,7 @@ export function dessinerPerso(ctx, cam, { x, y, equipe, pose }) {
   // Boîte positionnée par rapport aux pieds, tailles et décalages mis à l'échelle.
   const b = (dx, dy, z, w, d, h, couleur) => boite(ctx, cam, x + dx * S, ty + dy * S, z * S, w * S, d * S, h * S, couleur);
 
-  // Ombre portée au sol (soleil haut-gauche)
-  const o = cam.projeter(x + 9 * S, y + 5 * S, 0);
-  ctx.fillStyle = 'rgba(0,0,0,.32)';
-  ctx.beginPath();
-  ctx.ellipse(o.x, o.y, 22 * S * o.k, 6.5 * S * o.k, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ombreSol(ctx, cam, x, y, 15 * S, 0.45);
 
   // Jambes et chaussures
   const bal = Math.sin(pas) * 2.5;
@@ -99,7 +70,7 @@ export function dessinerPerso(ctx, cam, { x, y, equipe, pose }) {
 }
 
 export function positionRepos(equipe) {
-  return { x: LANCER.x + (equipe === 0 ? -62 : 62), y: LANCER.y + 12 };
+  return { x: LANCER.x + (equipe === 0 ? -84 : 84), y: LANCER.y + 26 };
 }
 
 export const POSTE = { x: LANCER.x, y: LANCER.y + 8 };

@@ -14,6 +14,8 @@ export const V_MAX = 780;      // vitesse de départ d'un tir rasant (aide du bo
 export const V_LANCER = 640;   // vitesse horizontale en vol à puissance 1
 export const T_VOL = 0.8;      // durée du vol à puissance 1, en secondes (∝ √puissance)
 export const IMPACT = 0.35;    // part de la vitesse conservée à l'atterrissage
+// Distance parcourue en l'air (jusqu'au point de chute) : linéaire en la puissance.
+export const PORTEE_AIR = V_LANCER * T_VOL;
 export const PORTEE = V_LANCER * V_LANCER * (T_VOL / V_LANCER + (IMPACT * IMPACT) / (2 * FRICTION));
 export const MAX_PAS = 1680;
 export const LANCER = { x: 180, y: 566 };

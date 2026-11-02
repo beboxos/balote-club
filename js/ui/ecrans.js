@@ -62,8 +62,8 @@ export function bandeau(texte, moi = false) {
   b.classList.toggle('est-moi', moi);
 }
 
-export function fin({ victoire, scores, surtitre, detail }) {
-  $('titre-fin').textContent = victoire ? 'Victoire' : 'Défaite';
+export function fin({ victoire, scores, surtitre, detail, titre }) {
+  $('titre-fin').textContent = titre ?? (victoire ? 'Victoire' : 'Défaite');
   $('fin-surtitre').textContent = surtitre || 'Fin de partie';
   $('fin-score-0').textContent = scores[0];
   $('fin-score-1').textContent = scores[1];

@@ -46,6 +46,14 @@ L'empreinte de référence de `tests/determinisme.html` (`af2de690`) valait pour
 
 La référence de `tests/determinisme.html` change avec la nouvelle physique : voir la valeur affichée par `node tests/physique.test.mjs`.
 
+## Retour de jeu n° 3 : courbe visible, vue iso, deux joueurs
+
+| Sujet | Avant | Maintenant | Justification |
+|---|---|---|---|
+| Courbe du lancer | Aucune indication d'arrivée | Pendant la visée : courbe en pointillés de la main au point de chute, trace au sol dessous, anneau d'impact. Seule la phase en l'air est montrée : ni le rebond ni le roulement | Retour de jeu : sans indication, on ne sait plus où la boule tombe. Le roulement après impact (≈ 48 unités à pleine puissance) et la dispersion restent à deviner, donc la difficulté demeure. |
+| Vue | Caméra en hauteur, axée sur le terrain | Même caméra pivotée de 35° (type isométrique), cadrée automatiquement sur la piste et les joueurs | Retour de jeu. La piste est plaquée par triangles texturés et les volumes n'affichent que leurs faces visibles. Le glissement du doigt est converti en direction du terrain selon la rotation. |
+| Deux joueurs | Solo ou duel en ligne | Mode « 2 joueurs, un téléphone » : chacun joue à son tour, un écran « Au tour de X, passez le téléphone » apparaît quand le tour change de joueur et le jeu attend le bouton Prêt | Demande de l'utilisateur. Aucun réseau ni bot ; 3 ou 6 boules au choix, comme en solo. |
+
 ## Vérifié
 
 - Solo complet (navigateur, 375 × 667) : partie menée jusqu'à l'écran de fin, aucune erreur console.
@@ -68,6 +76,7 @@ Deux clients Node exécutent les vrais `reseau.js`, `reconnexion.js`, `partie.js
 ## Non vérifié
 
 - Vue 3D : contrôlée dans le navigateur intégré à 375 × 667 (parties solo complètes à 3 et 4 boules, poses du lancer). Pas encore sur de vrais téléphones ni sur d'autres formats d'écran.
+- Mode 2 joueurs : parties complètes jouées par script (24 lancers, 11 passages de téléphone, écran de fin « X gagne »). Le passage réel du téléphone entre deux personnes n'a pas été essayé.
 - Le geste du doigt dans la vue 3D (glisser vers l'arrière) n'a été exercé qu'au clavier et par appel direct, pas au toucher.
 
 - Critère 5 sur de vrais iPhone et Android : à faire avec `tests/determinisme.html`.

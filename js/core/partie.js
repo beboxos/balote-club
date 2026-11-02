@@ -150,12 +150,14 @@ const attendreFrame = () => new Promise((ok) => requestAnimationFrame(ok));
 export class Partie {
   // equipeAuteur(uid) → 0 / 1 / -1 : en duel, un coup distant n'est accepté que si son
   // auteur (garanti par RLS dans le journal) est bien l'équipe dont c'est le tour.
-  constructor({ graine, cote = 0, reseau = null, equipeAuteur = null, boules = BOULES_DEFAUT, avantLancer, onTour, onCoup, onFin, onManche, onAnnulee }) {
+  constructor({ graine, cote = 0, reseau = null, equipeAuteur = null, boules = BOULES_DEFAUT, local = false, avantLancer, onTour, onCoup, onFin, onManche, onAnnulee }) {
     this.graine = graine;
     this.boules = boules;
     this.equipeAuteur = equipeAuteur;
     this.cote = cote;
     this.reseau = reseau;
+    this.local = local;      // deux joueurs sur le même appareil : chacun joue quand c'est son tour
+    this.bloque = false;     // vrai pendant l'écran « passez le téléphone »
     this.cb = { avantLancer, onTour, onCoup, onFin, onManche, onAnnulee };
     this.moteur = new Moteur(graine, boules);
     this.journal = [];
@@ -169,7 +171,12 @@ export class Partie {
   get etat() { return this.vue || this.moteur.etat; }
   get tour() { return this.moteur.tour; }
   get fini() { return this.moteur.fini; }
-  get estMonTour() { return !this.enVol && !this.moteur.fini && this.moteur.tour === this.cote; }
+  get estMonTour() {
+    return !this.enVol && !this.moteur.fini && !this.bloque && (this.local || this.moteur.tour === this.cote);
+  }
+
+  // Vrai si l'équipe est jouée par la personne qui tient l'appareil.
+  estJoueurLocal(equipe) { return this.local || equipe === this.cote; }
 
   // Coup local (joueur ou bot). Refusé pendant un vol ou après la fin.
   jouer(angle, puissance) {

@@ -43,6 +43,7 @@ function nomJoueur() { return prefs.pseudo.trim() || 'Vous'; }
 function texteTour(s) {
   const p = s.partie;
   if (p.fini) return '';
+  if (s.local) return `${s.noms[p.tour]}, à vous de jouer`;
   if (p.tour === p.cote) return 'À vous de jouer';
   return s.solo ? `${s.noms[p.tour]} vise…` : `${s.noms[p.tour]} joue…`;
 }
@@ -52,7 +53,7 @@ function majHud(s, texte) {
   const m = p.moteur;
   ui.hud({
     scores: m.scores, restantes: [m.restantes(0), m.restantes(1)], total: m.boules,
-    mene: m.mene, tour: m.tour, cote: p.cote, enVol: p.enVol,
+    mene: m.mene, tour: m.tour, cote: s.local ? m.tour : p.cote, enVol: p.enVol,
     texte: texte ?? texteTour(s),
   });
   ui.annoncerScore(s.noms, m.scores);
@@ -64,7 +65,7 @@ function creerPartie(s, graine, cote, reseau) {
     ? (uid) => (uid === ligne.hote ? 0 : uid === ligne.invite ? 1 : -1)
     : null;
   const partie = new Partie({
-    graine, cote, reseau, equipeAuteur, boules: s.boules,
+    graine, cote, reseau, equipeAuteur, boules: s.boules, local: !!s.local,
     avantLancer: ({ equipe, coup }) => rendu.lancerGeste(equipe, coup.puissance),
     onCoup: () => {
       audio.jouer('lancer', { volume: 0.8 });
@@ -72,7 +73,8 @@ function creerPartie(s, graine, cote, reseau) {
     },
     onTour: (equipe) => {
       majHud(s);
-      if (s.solo && equipe !== cote) jouerBot(partie, s.niveau, s.rng);
+      if (s.local) passerLeTelephone(s, equipe);
+      else if (s.solo && equipe !== cote) jouerBot(partie, s.niveau, s.rng);
     },
     onAnnulee: () => majHud(s, 'Cochonnet sorti : mène rejouée'),
     onManche: (ev) => {
@@ -99,13 +101,14 @@ function lancerJeu(s) {
 function terminer(s, scores, { abandon = false } = {}) {
   if (s.termine) return;
   s.termine = true;
-  const victoire = scores[s.partie.cote] > scores[1 - s.partie.cote] || abandon;
+  const victoire = s.local || scores[s.partie.cote] > scores[1 - s.partie.cote] || abandon;
   audio.jouer(victoire ? 'victoire' : 'defaite');
   s.reseau?.cloturer(abandon ? 'abandon' : 'fin');
   ui.fin({
     victoire,
     scores,
-    surtitre: s.solo ? `Contre le club · ${NIVEAUX[s.niveau].nom}` : 'Duel à distance',
+    titre: s.local ? `${s.noms[scores[0] > scores[1] ? 0 : 1]} gagne` : undefined,
+    surtitre: s.local ? 'Deux joueurs, un téléphone' : s.solo ? `Contre le club · ${NIVEAUX[s.niveau].nom}` : 'Duel à distance',
     detail: abandon ? `${s.noms[1 - s.partie.cote]} a quitté la partie.` : `En ${s.partie.moteur.mene} mène${s.partie.moteur.mene > 1 ? 's' : ''}.`,
   });
   setTimeout(() => {
@@ -144,6 +147,39 @@ function demarrerSolo() {
   };
   creerPartie(s, graine, 0, null);
   lancerJeu(s);
+}
+
+// ---------- Deux joueurs sur un téléphone ----------
+
+function demarrerLocal() {
+  fermerSession();
+  const graine = crypto.getRandomValues(new Uint32Array(1))[0] >>> 1;
+  const s = {
+    solo: true,
+    local: true,
+    boules: prefs.boules,
+    vu: 0,   // équipe qui tient le téléphone
+    noms: [prefs.pseudo.trim() || 'Joueur 1', 'Joueur 2'],
+    avatars: [prefs.avatar, prefs.avatar === '02' ? '03' : '02'],
+  };
+  creerPartie(s, graine, 0, null);
+  lancerJeu(s);
+}
+
+// Quand le tour passe à l'autre joueur : écran « passez le téléphone », le jeu attend.
+function passerLeTelephone(s, equipe) {
+  const p = s.partie;
+  if (equipe === s.vu || p.fini) return;
+  const dlg = $('dialogue-passage');
+  $('titre-passage').textContent = `Au tour de ${s.noms[equipe]}`;
+  p.bloque = true;
+  s.vu = equipe;
+  majHud(s);
+  dlg.addEventListener('close', () => {
+    p.bloque = false;
+    majHud(s);
+  }, { once: true });
+  dlg.showModal();
 }
 
 // ---------- Duel ----------
@@ -379,6 +415,8 @@ function brancherInterface() {
   });
 
   $('btn-solo').addEventListener('click', demarrerSolo);
+  $('btn-local').addEventListener('click', demarrerLocal);
+  $('btn-passage-pret').addEventListener('click', () => $('dialogue-passage').close());
 
   const enLigne = enLigneDisponible();
   for (const id of ['btn-creer', 'btn-rejoindre']) {
@@ -428,7 +466,8 @@ function brancherInterface() {
 
   $('btn-rejouer').addEventListener('click', () => {
     const solo = !session || session.solo;
-    if (solo) demarrerSolo(); else creerDuel();
+    if (session?.local) demarrerLocal();
+    else if (solo) demarrerSolo(); else creerDuel();
   });
 
   $('btn-quitter').addEventListener('click', () => {

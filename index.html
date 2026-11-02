@@ -57,6 +57,7 @@
             <button type="button" role="radio" aria-checked="false" data-boules="6">6 boules</button>
           </div>
           <button type="button" class="btn btn--plein" id="btn-solo">Jouer contre le club</button>
+          <button type="button" class="btn" id="btn-local">2 joueurs, un téléphone</button>
           <div class="rangee">
             <button type="button" class="btn" id="btn-creer">Créer un duel</button>
             <button type="button" class="btn" id="btn-rejoindre">Rejoindre</button>
@@ -172,6 +173,12 @@
     <h2 id="titre-avatar" class="titre titre--s">Choisir un portrait</h2>
     <div class="grille-avatars" id="grille-avatars"></div>
     <button type="button" class="btn btn--fantome" id="btn-fermer-avatar">Fermer</button>
+  </dialog>
+
+  <dialog id="dialogue-passage" class="dialogue" aria-labelledby="titre-passage">
+    <h2 id="titre-passage" class="titre titre--s">Au tour de Joueur</h2>
+    <p class="message">Passez-lui le téléphone, puis touchez Prêt.</p>
+    <button type="button" class="btn btn--plein" id="btn-passage-pret">Prêt</button>
   </dialog>
 
   <dialog id="dialogue-quitter" class="dialogue" aria-labelledby="titre-quitter">

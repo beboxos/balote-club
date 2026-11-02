@@ -1,16 +1,13 @@
-// Vue en perspective du terrain : une caméra derrière le lanceur, légèrement en hauteur.
+// Vue du terrain en perspective, en hauteur et pivotée (type isométrique).
 // Purement visuel : la physique reste en 2D (x, y) du terrain, rien ici ne la touche.
-import { TERRAIN, LANCER } from '../core/physique.js';
+import { TERRAIN, LANCER, RAYON } from '../core/physique.js';
 import { mulberry32 } from '../core/rng.js';
 
-// Vue en hauteur, presque de dessus (type isométrique) : on voit le terrain en entier et la
-// hauteur des boules en l'air.
 const HAUTEUR = 600;                 // hauteur de la caméra au-dessus du sol
-const RECUL = 100;                   // distance derrière le cercle de lancer
 const TANGAGE = (50 * Math.PI) / 180;
-const Y_LANCER_ECRAN = 0.8;          // position verticale du cercle de lancer à l'écran
-const Y_FOND_ECRAN = 0.2;            // position du fond de piste
-const Y_FOND = 50;                   // ordonnée terrain du fond de piste
+const LACET = (35 * Math.PI) / 180;  // rotation de la vue autour de la verticale
+const PIVOT = { x: TERRAIN.l / 2, y: 330 };
+const DISTANCE = 336;                // recul de la caméra par rapport au pivot
 
 // Les boules et le cochonnet sont dessinés un peu plus gros que leur rayon physique,
 // sinon le fond de piste les réduit à quelques pixels.
@@ -22,46 +19,100 @@ export class Camera {
     this.h = h;
     this.s = Math.sin(TANGAGE);
     this.c = Math.cos(TANGAGE);
-    this.camY = LANCER.y + RECUL;
-    const qLancer = this.q(LANCER.y);
-    const qFond = this.q(Y_FOND);
-    this.f = Math.min((h * (Y_LANCER_ECRAN - Y_FOND_ECRAN)) / (qFond - qLancer), l * 1.5);
-    this.cx = l / 2;
-    this.cy = h * Y_LANCER_ECRAN + this.f * qLancer;
-    this.horizon = this.cy - this.f * Math.tan(TANGAGE);
-    // Écrasement vertical au cercle de lancer : pixels par unité en hauteur d'écran ÷ en largeur.
-    const a = this.projeter(LANCER.x, LANCER.y, 0);
-    const b = this.projeter(LANCER.x, LANCER.y - 10, 0);
-    this.ratio = (a.y - b.y) / (10 * a.k);
+    this.cl = Math.cos(LACET);
+    this.sl = Math.sin(LACET);
+    // Position de la caméra dans le terrain, pour savoir quelles faces sont visibles.
+    this.pos = { x: PIVOT.x + DISTANCE * this.sl, y: PIVOT.y + DISTANCE * this.cl, z: HAUTEUR };
+    this.f = 1;
+    this.cx = 0;
+    this.cy = 0;
+    this.cadrer();
   }
 
-  // Tangente de l'angle vu depuis l'axe optique pour un point (y, hauteur).
-  q(y, hauteur = 0) {
-    const u = this.camY - y;
-    const dh = hauteur - HAUTEUR;
-    return (u * this.s + dh * this.c) / (u * this.c - dh * this.s);
+  // Cadre la piste et la zone des joueurs dans la fenêtre, entre le bandeau du haut et celui du bas.
+  cadrer() {
+    const m = TERRAIN.marge - 6;
+    const points = [
+      [m, m, 0], [TERRAIN.l - m, m, 0], [TERRAIN.l - m, TERRAIN.h - m, 0], [m, TERRAIN.h - m, 0],
+      [LANCER.x - 70, LANCER.y + 14, 85], [LANCER.x + 70, LANCER.y + 14, 85],
+    ];
+    let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity;
+    for (const [x, y, z] of points) {
+      const n = this.normalise(x, y, z);
+      x0 = Math.min(x0, n.x); x1 = Math.max(x1, n.x);
+      y0 = Math.min(y0, n.y); y1 = Math.max(y1, n.y);
+    }
+    this.f = Math.min((this.l * 0.94) / (x1 - x0), (this.h * 0.81) / (y1 - y0));
+    this.cx = this.l / 2 - (this.f * (x0 + x1)) / 2;
+    this.cy = this.h * 0.5 + (this.f * (y0 + y1)) / 2;
   }
 
-  // Terrain (x, y) à hauteur du sol → écran. k = pixels par unité à cette profondeur.
-  projeter(x, y, hauteur = 0) {
-    const u = this.camY - y;
+  // Coordonnées d'écran pour f = 1, centrées sur l'axe optique.
+  normalise(x, y, hauteur) {
+    const dx = x - PIVOT.x;
+    const dy = y - PIVOT.y;
+    const rx = dx * this.cl - dy * this.sl;
+    const ry = dx * this.sl + dy * this.cl;
+    const u = DISTANCE - ry;
     const dh = hauteur - HAUTEUR;
     const profondeur = u * this.c - dh * this.s;
-    const k = this.f / profondeur;
-    return { x: this.cx + (x - LANCER.x) * k, y: this.cy - (u * this.s + dh * this.c) * k, k };
+    return { x: rx / profondeur, y: (u * this.s + dh * this.c) / profondeur, p: profondeur };
   }
 
-  // Ligne d'écran → ordonnée du terrain (sol), pour peindre la piste ligne par ligne.
-  sol(ecranY) {
-    const q = (this.cy - ecranY) / this.f;
-    const u = (HAUTEUR * (this.c + q * this.s)) / (this.s - q * this.c);
-    return this.camY - u;
+  // Terrain (x, y, hauteur) → écran. k = pixels par unité à cette profondeur.
+  projeter(x, y, hauteur = 0) {
+    const n = this.normalise(x, y, hauteur);
+    return { x: this.cx + this.f * n.x, y: this.cy - this.f * n.y, k: this.f / n.p };
   }
 
-  // Ordonnée écran → échelle (px par unité) pour une ligne du sol.
-  echelleLigne(ecranY) {
-    const y = this.sol(ecranY);
-    return this.f / ((this.camY - y) * this.c + HAUTEUR * this.s);
+  // Vecteurs d'écran d'une unité de terrain en x et en y, au cercle de lancer : sert à convertir
+  // un glissement du doigt en direction de tir.
+  base() {
+    const o = this.projeter(LANCER.x, LANCER.y, 0);
+    const a = this.projeter(LANCER.x + 1, LANCER.y, 0);
+    const b = this.projeter(LANCER.x, LANCER.y + 1, 0);
+    return { ex: { x: a.x - o.x, y: a.y - o.y }, ey: { x: b.x - o.x, y: b.y - o.y } };
+  }
+}
+
+// ---------------------------------------------------------------- Volumes
+
+function nuancer(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v) => Math.max(0, Math.min(255, Math.round(v * f)));
+  return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
+}
+
+function polygone(g, pts, couleur) {
+  g.fillStyle = couleur;
+  g.beginPath();
+  g.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
+  g.closePath();
+  g.fill();
+}
+
+// Éclairage fixe depuis le haut-gauche du terrain, indépendant de la rotation de la vue.
+const LUMIERE = { haut: 1.18, xNeg: 1.0, xPos: 0.74, yNeg: 0.9, yPos: 0.8 };
+
+// Parallélépipède axé sur le terrain : on ne dessine que les faces tournées vers la caméra.
+export function boite(g, cam, cx, cy, z, w, d, h, couleur) {
+  const x0 = cx - w / 2; const x1 = cx + w / 2;
+  const y0 = cy - d / 2; const y1 = cy + d / 2;
+  const z1 = z + h;
+  const P = (x, y, zz) => cam.projeter(x, y, zz);
+  const cam3 = cam.pos;
+  const faces = [
+    { n: [-1, 0, 0], p: [x0, cy, z + h / 2], q: [[x0, y0, z], [x0, y1, z], [x0, y1, z1], [x0, y0, z1]], f: LUMIERE.xNeg },
+    { n: [1, 0, 0], p: [x1, cy, z + h / 2], q: [[x1, y0, z], [x1, y1, z], [x1, y1, z1], [x1, y0, z1]], f: LUMIERE.xPos },
+    { n: [0, -1, 0], p: [cx, y0, z + h / 2], q: [[x0, y0, z], [x1, y0, z], [x1, y0, z1], [x0, y0, z1]], f: LUMIERE.yNeg },
+    { n: [0, 1, 0], p: [cx, y1, z + h / 2], q: [[x0, y1, z], [x1, y1, z], [x1, y1, z1], [x0, y1, z1]], f: LUMIERE.yPos },
+    { n: [0, 0, 1], p: [cx, cy, z1], q: [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], f: LUMIERE.haut },
+  ];
+  for (const f of faces) {
+    const vu = (cam3.x - f.p[0]) * f.n[0] + (cam3.y - f.p[1]) * f.n[1] + (cam3.z - f.p[2]) * f.n[2];
+    if (vu <= 0) continue;
+    polygone(g, f.q.map(([x, y, zz]) => P(x, y, zz)), nuancer(couleur, f.f));
   }
 }
 
@@ -69,24 +120,7 @@ export class Camera {
 
 function hasard(graine) { return mulberry32(graine); }
 
-function ciel(g, cam, l) {
-  const h = cam.horizon + 2;
-  if (h <= 2) return;
-  const fond = g.createLinearGradient(0, 0, 0, h);
-  fond.addColorStop(0, '#25344a');
-  fond.addColorStop(0.55, '#6d7088');
-  fond.addColorStop(1, '#f0b88c');
-  g.fillStyle = fond;
-  g.fillRect(0, 0, l, h);
-  // Soleil bas, côté haut-gauche : cohérent avec les ombres portées vers la droite.
-  const soleil = g.createRadialGradient(l * 0.18, h * 0.88, 0, l * 0.18, h * 0.88, l * 0.7);
-  soleil.addColorStop(0, 'rgba(255,214,150,.55)');
-  soleil.addColorStop(1, 'rgba(255,214,150,0)');
-  g.fillStyle = soleil;
-  g.fillRect(0, 0, l, h);
-}
-
-function arbre(g, cam, x, y, hauteur, rng, teinte) {
+function arbre(g, cam, x, y, hauteur, rng, teinte, large = 0.5) {
   const pied = cam.projeter(x, y, 0);
   const k = pied.k;
   const tronc = hauteur * 0.55;
@@ -94,35 +128,34 @@ function arbre(g, cam, x, y, hauteur, rng, teinte) {
   g.fillStyle = '#3b2a20';
   const lt = 11 * k;
   g.fillRect(pied.x - lt / 2, haut.y, lt, pied.y - haut.y);
-  // Houppier : plusieurs masses, ombre en bas à droite, lumière en haut à gauche.
+  // Houppier : plusieurs masses, lumière en haut à gauche.
   const centre = cam.projeter(x, y, tronc + hauteur * 0.32);
-  const rayon = hauteur * 0.5 * k;
+  const rayon = hauteur * large * k;
   for (let i = 0; i < 7; i++) {
     const a = rng() * Math.PI * 2;
     const d = rng() * rayon * 0.7;
     const r = rayon * (0.45 + rng() * 0.3);
-    const cx = centre.x + Math.cos(a) * d;
-    const cy = centre.y + Math.sin(a) * d * 0.6;
-    const gr = g.createRadialGradient(cx - r * 0.3, cy - r * 0.35, 0, cx, cy, r);
+    const px = centre.x + Math.cos(a) * d;
+    const py = centre.y + Math.sin(a) * d * 0.7;
+    const gr = g.createRadialGradient(px - r * 0.3, py - r * 0.35, 0, px, py, r);
     gr.addColorStop(0, teinte[0]);
     gr.addColorStop(1, teinte[1]);
     g.fillStyle = gr;
     g.beginPath();
-    g.arc(cx, cy, r, 0, Math.PI * 2);
+    g.arc(px, py, r, 0, Math.PI * 2);
     g.fill();
   }
 }
 
-function fond(g, cam, l) {
+function herbe(g, cam) {
+  const { l, h } = cam;
   const rng = hasard(0xb10c);
-  const h = cam.h;
-  // Herbe sur tout l'écran (l'horizon est hors cadre), avec brins clairs et sombres.
-  const herbe = g.createLinearGradient(0, 0, 0, h);
-  herbe.addColorStop(0, '#5f7f43');
-  herbe.addColorStop(1, '#496a35');
-  g.fillStyle = herbe;
+  const fond = g.createLinearGradient(0, 0, 0, h);
+  fond.addColorStop(0, '#5f7f43');
+  fond.addColorStop(1, '#496a35');
+  g.fillStyle = fond;
   g.fillRect(0, 0, l, h);
-  for (let i = 0; i < 900; i++) {
+  for (let i = 0; i < 1100; i++) {
     g.strokeStyle = rng() < 0.5 ? 'rgba(150,190,100,.30)' : 'rgba(30,55,25,.30)';
     g.lineWidth = 1;
     const x = rng() * l;
@@ -132,119 +165,160 @@ function fond(g, cam, l) {
     g.lineTo(x + (rng() - 0.5) * 3, y - 2 - rng() * 3);
     g.stroke();
   }
+}
 
-  // Haie derrière le fond de piste et le long des côtés
-  for (const [x0, y0, x1, y1] of [[-400, -26, 760, -26], [-34, -26, -34, 700], [394, -26, 394, 700]]) {
-    const a = cam.projeter(x0, y0, 0);
-    const b = cam.projeter(x1, y1, 0);
-    const a2 = cam.projeter(x0, y0, 26);
-    const b2 = cam.projeter(x1, y1, 26);
-    const haie = g.createLinearGradient(0, Math.min(a2.y, b2.y), 0, Math.max(a.y, b.y));
-    haie.addColorStop(0, '#59803f');
-    haie.addColorStop(1, '#2c4727');
-    g.fillStyle = haie;
-    g.beginPath();
-    g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(b2.x, b2.y); g.lineTo(a2.x, a2.y);
-    g.closePath();
-    g.fill();
+// Haies basses autour du terrain, au-delà des planches.
+function haies(g, cam) {
+  const hauteurHaie = 26;
+  const segments = [
+    [-60, -50, TERRAIN.l + 60, -38],
+    [-60, -50, -48, TERRAIN.h + 50],
+    [TERRAIN.l + 48, -50, TERRAIN.l + 60, TERRAIN.h + 50],
+  ];
+  for (const [x0, y0, x1, y1] of segments) {
+    boite(g, cam, (x0 + x1) / 2, (y0 + y1) / 2, 0, x1 - x0, y1 - y0, hauteurHaie, '#3f6236');
   }
+}
 
-  // Arbres autour de la piste : ombre au sol (soleil haut-gauche), tronc, houppier.
-  const arbres = [[-80, 130], [-90, 400], [440, 250], [450, 520], [150, -110], [330, -100]];
-  for (const [x, y] of arbres) {
+// Piste : la texture de terrain (vue du dessus) est plaquée sur une grille de triangles projetés.
+function triangle(g, tex, s0, s1, s2, t0, t1, t2) {
+  const det = (t1.x - t0.x) * (t2.y - t0.y) - (t2.x - t0.x) * (t1.y - t0.y);
+  if (Math.abs(det) < 1e-9) return;
+  const a = ((s1.x - s0.x) * (t2.y - t0.y) - (s2.x - s0.x) * (t1.y - t0.y)) / det;
+  const c = ((s2.x - s0.x) * (t1.x - t0.x) - (s1.x - s0.x) * (t2.x - t0.x)) / det;
+  const b = ((s1.y - s0.y) * (t2.y - t0.y) - (s2.y - s0.y) * (t1.y - t0.y)) / det;
+  const d = ((s2.y - s0.y) * (t1.x - t0.x) - (s1.y - s0.y) * (t2.x - t0.x)) / det;
+  const e = s0.x - a * t0.x - c * t0.y;
+  const f = s0.y - b * t0.x - d * t0.y;
+  // Légère dilatation autour du centre : évite les fines lignes entre triangles voisins.
+  const mx = (s0.x + s1.x + s2.x) / 3;
+  const my = (s0.y + s1.y + s2.y) / 3;
+  const gonfle = (p) => {
+    const dx = p.x - mx; const dy = p.y - my;
+    const n = Math.sqrt(dx * dx + dy * dy) || 1;
+    return { x: p.x + (dx / n) * 0.9, y: p.y + (dy / n) * 0.9 };
+  };
+  const p0 = gonfle(s0); const p1 = gonfle(s1); const p2 = gonfle(s2);
+  g.save();
+  g.beginPath();
+  g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.lineTo(p2.x, p2.y);
+  g.closePath();
+  g.clip();
+  g.setTransform(a, b, c, d, e, f);
+  const u0 = Math.min(t0.x, t1.x, t2.x) - 2;
+  const v0 = Math.min(t0.y, t1.y, t2.y) - 2;
+  const u1 = Math.max(t0.x, t1.x, t2.x) + 2;
+  const v1 = Math.max(t0.y, t1.y, t2.y) + 2;
+  g.drawImage(tex, u0, v0, u1 - u0, v1 - v0, u0, v0, u1 - u0, v1 - v0);
+  g.restore();
+}
+
+function piste(g, cam, texture, echelleTex) {
+  const NX = 18;
+  const NY = 32;
+  const sommets = [];
+  for (let j = 0; j <= NY; j++) {
+    for (let i = 0; i <= NX; i++) {
+      const x = (i / NX) * TERRAIN.l;
+      const y = (j / NY) * TERRAIN.h;
+      sommets.push({ s: cam.projeter(x, y, 0), t: { x: x * echelleTex, y: y * echelleTex } });
+    }
+  }
+  const at = (i, j) => sommets[j * (NX + 1) + i];
+  for (let j = 0; j < NY; j++) {
+    for (let i = 0; i < NX; i++) {
+      const a = at(i, j); const b = at(i + 1, j); const c = at(i + 1, j + 1); const d = at(i, j + 1);
+      triangle(g, texture, a.s, b.s, c.s, a.t, b.t, c.t);
+      triangle(g, texture, a.s, c.s, d.s, a.t, c.t, d.t);
+    }
+  }
+}
+
+// Planches de bordure de la piste.
+function bordures(g, cam) {
+  const m = TERRAIN.marge - 6;
+  const e = 6;
+  const L = TERRAIN.l;
+  const H = TERRAIN.h;
+  const planches = [
+    [m - e, m - e, L - m + e, m],             // fond
+    [m - e, H - m, L - m + e, H - m + e],     // côté lanceur
+    [m - e, m, m, H - m],
+    [L - m, m, L - m + e, H - m],
+  ];
+  for (const [x0, y0, x1, y1] of planches) {
+    boite(g, cam, (x0 + x1) / 2, (y0 + y1) / 2, 0, x1 - x0, y1 - y0, 8, '#cdbb9c');
+  }
+}
+
+function arbres(g, cam) {
+  const rng = hasard(0x7ee5);
+  const places = [[-110, 120], [-120, 420], [470, 230], [480, 520], [140, -130], [330, -140]];
+  for (const [x, y] of places) {
     const o = cam.projeter(x + 40, y + 45, 0);
     g.fillStyle = 'rgba(0,0,0,.25)';
     g.beginPath();
     g.ellipse(o.x, o.y, 62 * o.k, 46 * o.k, 0, 0, Math.PI * 2);
     g.fill();
   }
-  for (const [x, y] of arbres) arbre(g, cam, x, y, 150 + rng() * 30, rng, ['#7f9a56', '#3a5a30']);
+  for (const [x, y] of places) arbre(g, cam, x, y, 150 + rng() * 30, rng, ['#7f9a56', '#3a5a30']);
 }
 
-// Piste : la texture de terrain (vue du dessus) est étirée ligne par ligne.
-function piste(g, cam, texture, echelleTex, l, h) {
-  const yFondPiste = cam.projeter(0, 0).y;
-  const debut = Math.max(0, Math.ceil(cam.horizon), Math.floor(yFondPiste));
-  for (let ey = debut; ey < h; ey++) {
-    const y = cam.sol(ey + 0.5);
-    if (y < 0 || y >= TERRAIN.h) continue;
-    const k = cam.echelleLigne(ey + 0.5);
-    const x0 = cam.cx + (0 - LANCER.x) * k;
-    const x1 = cam.cx + (TERRAIN.l - LANCER.x) * k;
-    g.drawImage(texture, 0, Math.floor(y * echelleTex), TERRAIN.l * echelleTex, 1, x0, ey, x1 - x0, 1.6);
-  }
-}
-
-// Bordures basses de la piste (planches), sur les deux côtés et au fond.
-function bordures(g, cam) {
-  const m = TERRAIN.marge - 6;
-  const cotes = [m, TERRAIN.l - m];
-  for (const x of cotes) {
-    const bas = cam.projeter(x, TERRAIN.h - m, 0);
-    const bas2 = cam.projeter(x, m, 0);
-    const haut = cam.projeter(x, TERRAIN.h - m, 7);
-    const haut2 = cam.projeter(x, m, 7);
-    g.fillStyle = '#d6c5a8';
-    g.beginPath();
-    g.moveTo(bas.x, bas.y); g.lineTo(bas2.x, bas2.y);
-    g.lineTo(haut2.x, haut2.y); g.lineTo(haut.x, haut.y);
-    g.closePath();
-    g.fill();
-    g.strokeStyle = 'rgba(255,245,225,.55)';
-    g.lineWidth = Math.max(1, haut.k * 1.1);
-    g.beginPath();
-    g.moveTo(haut.x, haut.y); g.lineTo(haut2.x, haut2.y);
-    g.stroke();
-  }
-  const g1 = cam.projeter(cotes[0], m, 0);
-  const g2 = cam.projeter(cotes[1], m, 0);
-  const g3 = cam.projeter(cotes[0], m, 7);
-  const g4 = cam.projeter(cotes[1], m, 7);
-  g.fillStyle = '#bfae92';
-  g.beginPath();
-  g.moveTo(g1.x, g1.y); g.lineTo(g2.x, g2.y); g.lineTo(g4.x, g4.y); g.lineTo(g3.x, g3.y);
-  g.closePath();
-  g.fill();
-}
-
-// Image fixe du décor : ciel, arbres, sol, piste, brume, vignette. Recalculée au redimensionnement.
+// Image fixe du décor. Recalculée au redimensionnement.
 export function peindreDecor(g, cam, texture, echelleTex) {
-  const { l, h } = cam;
-  ciel(g, cam, l);
-  fond(g, cam, l);
-  piste(g, cam, texture, echelleTex, l, h);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  herbe(g, cam);
+  haies(g, cam);
+  piste(g, cam, texture, echelleTex);
   bordures(g, cam);
-  // Vignette
-  const v = g.createRadialGradient(l / 2, h * 0.55, h * 0.3, l / 2, h * 0.55, h * 0.85);
+  arbres(g, cam);
+  const { l, h } = cam;
+  const v = g.createRadialGradient(l / 2, h * 0.5, h * 0.3, l / 2, h * 0.5, h * 0.8);
   v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,0,0,.5)');
+  v.addColorStop(1, 'rgba(0,0,0,.45)');
   g.fillStyle = v;
   g.fillRect(0, 0, l, h);
 }
 
 // ---------------------------------------------------------------- Objets en perspective
 
-// Ombre au sol : cercle du terrain projeté, donc ellipse aplatie. Soleil haut-gauche.
-export function ombreSol(ctx, cam, x, y, rayon, alpha = 0.4, hauteur = 0) {
-  // Plus la boule est haut, plus l'ombre s'écarte (soleil haut-gauche) et s'estompe.
-  alpha *= 1 / (1 + hauteur / 220);
-  const p = cam.projeter(x + rayon * 0.55 + hauteur * 0.45, y + rayon * 0.35 + hauteur * 0.6, 0);
-  const avant = cam.projeter(x, y + rayon, 0);
-  const arriere = cam.projeter(x, y - rayon, 0);
-  const rx = rayon * p.k * 1.05;
-  const ry = Math.max(1, Math.abs(avant.y - arriere.y) / 2) * 1.05;
+// Dessine dans le repère d'un cercle posé au sol : le rayon 1 devient l'ellipse projetée.
+function surSol(ctx, cam, x, y, rayon, dessiner) {
+  const o = cam.projeter(x, y, 0);
+  const a = cam.projeter(x + rayon, y, 0);
+  const b = cam.projeter(x, y + rayon, 0);
   ctx.save();
-  ctx.translate(p.x, p.y);
-  ctx.scale(1, ry / rx);
-  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
-  g.addColorStop(0, `rgba(0,0,0,${alpha})`);
-  g.addColorStop(0.7, `rgba(0,0,0,${alpha * 0.6})`);
-  g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(0, 0, rx, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.transform(a.x - o.x, a.y - o.y, b.x - o.x, b.y - o.y, o.x, o.y);
+  dessiner(ctx, rayon * o.k);
   ctx.restore();
+}
+
+// Ombre au sol, soleil haut-gauche. Plus la boule est haut, plus l'ombre s'écarte et s'estompe.
+export function ombreSol(ctx, cam, x, y, rayon, alpha = 0.4, hauteur = 0) {
+  alpha *= 1 / (1 + hauteur / 220);
+  surSol(ctx, cam, x + rayon * 0.55 + hauteur * 0.45, y + rayon * 0.35 + hauteur * 0.6, 1, () => {
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rayon * 1.05);
+    g.addColorStop(0, `rgba(0,0,0,${alpha})`);
+    g.addColorStop(0.7, `rgba(0,0,0,${alpha * 0.6})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, rayon * 1.05, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// Anneau posé au sol (fin de mène, point de chute, jauge).
+export function anneauSol(ctx, cam, x, y, rayon, couleur, epaisseurPx, debut = 0, fin = Math.PI * 2) {
+  surSol(ctx, cam, x, y, 1, () => {
+    const o = cam.projeter(x, y, 0);
+    ctx.strokeStyle = couleur;
+    ctx.lineWidth = epaisseurPx / o.k;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, 0, rayon, debut, fin);
+    ctx.stroke();
+  });
 }
 
 export function cochonnet(ctx, px, py, rayon, tempsMs, calme) {
@@ -262,39 +336,43 @@ export function cochonnet(ctx, px, py, rayon, tempsMs, calme) {
   ctx.restore();
 }
 
-// Direction du tir : trait pointillé court au sol. Aucun point d'arrivée n'est montré,
-// c'est au joueur de doser la force.
-export function guide(ctx, cam, x0, y0, dx, dy) {
-  const a = cam.projeter(x0 + dx * 22, y0 + dy * 22, 0);
-  const b = cam.projeter(x0 + dx * 95, y0 + dy * 95, 0);
+// Courbe du lancer jusqu'au point de chute (les rebonds et le roulement ne sont pas montrés).
+// points : [{ x, y, h }] le long de la trajectoire, du lâcher à l'impact.
+export function trajectoire(ctx, cam, points, tempsMs) {
+  const sol = points.map((p) => cam.projeter(p.x, p.y, 0));
+  const air = points.map((p) => cam.projeter(p.x, p.y, p.h));
+  const fin = points[points.length - 1];
+  const k = cam.projeter(fin.x, fin.y, 0).k;
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,170,115,.95)';
-  ctx.lineWidth = Math.max(2, a.k * 1.8);
   ctx.lineCap = 'round';
-  ctx.setLineDash([a.k * 5, a.k * 8]);
+  // Trace au sol sous la courbe : aide à lire la distance
+  ctx.strokeStyle = 'rgba(255,255,255,.28)';
+  ctx.lineWidth = Math.max(1.5, k * 1.6);
+  ctx.setLineDash([k * 3, k * 6]);
   ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
+  ctx.moveTo(sol[0].x, sol[0].y);
+  for (let i = 1; i < sol.length; i++) ctx.lineTo(sol[i].x, sol[i].y);
   ctx.stroke();
+  // Courbe en l'air
+  ctx.strokeStyle = 'rgba(255,170,115,.98)';
+  ctx.lineWidth = Math.max(2.2, k * 2.6);
+  ctx.setLineDash([k * 6, k * 7]);
+  ctx.lineDashOffset = -(tempsMs / 45) % (k * 13);
+  ctx.beginPath();
+  ctx.moveTo(air[0].x, air[0].y);
+  for (let i = 1; i < air.length; i++) ctx.lineTo(air[i].x, air[i].y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineDashOffset = 0;
   ctx.restore();
+  // Point de chute
+  anneauSol(ctx, cam, fin.x, fin.y, RAYON * 1.9, 'rgba(255,150,95,.98)', Math.max(2.4, k * 2.4));
+  anneauSol(ctx, cam, fin.x, fin.y, RAYON * 0.55, 'rgba(255,150,95,.85)', Math.max(2, k * 2));
 }
 
 // Jauge de force : anneau autour du cercle de lancer qui se remplit.
 export function jauge(ctx, cam, x, y, p) {
-  const R = 30;
-  const c = cam.projeter(x, y, 0);
-  const ry = Math.abs(cam.projeter(x, y + R, 0).y - cam.projeter(x, y - R, 0).y) / 2;
-  const rx = R * c.k;
-  ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineWidth = Math.max(3, c.k * 4);
-  ctx.strokeStyle = 'rgba(0,0,0,.35)';
-  ctx.beginPath();
-  ctx.ellipse(c.x, c.y, rx, ry, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,150,95,.98)';
-  ctx.beginPath();
-  ctx.ellipse(c.x, c.y, rx, ry, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p);
-  ctx.stroke();
-  ctx.restore();
+  const k = cam.projeter(x, y, 0).k;
+  anneauSol(ctx, cam, x, y, 30, 'rgba(0,0,0,.35)', Math.max(3, k * 4));
+  anneauSol(ctx, cam, x, y, 30, 'rgba(255,150,95,.98)', Math.max(3, k * 4), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p);
 }
