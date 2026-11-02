@@ -1,4 +1,6 @@
 // Navigation entre écrans et mise à jour des éléments DOM (HUD, salon, fin).
+import { avatarSrc } from '../core/profil.js';
+
 const $ = (id) => document.getElementById(id);
 
 const ECRANS = ['menu', 'rejoindre', 'salon', 'jeu', 'fin'];
@@ -23,7 +25,7 @@ export function afficher(nom) {
 
 export function ecranCourant() { return courant; }
 
-export { avatarSrc } from '../core/profil.js';
+export { avatarSrc };
 
 export function joueurs(noms, avatars) {
   for (const i of [0, 1]) {

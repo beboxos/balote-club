@@ -40,6 +40,11 @@ export class Rendu {
     this.cam = null;
     this.visee = null;           // { cd, p } pendant le geste ou au clavier
     this.drag = null;
+    this.observer = false;       // mode observation : déplacer et zoomer la vue au lieu de viser
+    this.vue = { z: 1, tx: 0, ty: 0 };
+    this.vueDecor = { z: 1, tx: 0, ty: 0 };   // vue avec laquelle le décor pré-rendu a été peint
+    this.pointes = new Map();
+    this.minuteurDecor = null;
     this.etatVu = null;
     this.actif = false;
     this.dernierT = 0;
@@ -53,6 +58,8 @@ export class Rendu {
 
   attacher(partie) {
     this.partie = partie;
+    this.observer = false;
+    this.reinitialiserVue();
     this.visee = null;
     this.drag = null;
     this.geste = null;
@@ -99,6 +106,7 @@ export class Rendu {
     this.unite = h / TERRAIN.h;   // pixels d'écran par unité, pour convertir le geste du doigt
     viderCaches();
     this.cam = new Camera(l, h);
+    Object.assign(this.cam, this.vue);
     this.construire();
   }
 
@@ -118,6 +126,7 @@ export class Rendu {
     this.decor.width = this.canvas.width;
     this.decor.height = this.canvas.height;
     peindreDecor(this.decor.getContext('2d'), this.cam, this.texture, TEX);
+    this.vueDecor = { z: this.cam.z, tx: this.cam.tx, ty: this.cam.ty };
   }
 
   coord(clientX, clientY) {
@@ -125,11 +134,114 @@ export class Rendu {
   }
 
   peutViser() {
-    return !!this.partie && this.partie.estMonTour && !this.partie.vue;
+    return !this.observer && !!this.partie && this.partie.estMonTour && !this.partie.vue;
+  }
+
+  // ---- Mode observation : glisser pour déplacer, pincer ou molette pour zoomer ----
+
+  basculerObserver() {
+    this.observer = !this.observer;
+    this.drag = null;
+    this.visee = null;
+    this.pointes.clear();
+    if (!this.observer) this.reinitialiserVue();
+    return this.observer;
+  }
+
+  reinitialiserVue() {
+    this.vue = { z: 1, tx: 0, ty: 0 };
+    if (this.cam) { Object.assign(this.cam, this.vue); this.planifierDecor(); }
+  }
+
+  limiterVue() {
+    const v = this.vue;
+    v.z = Math.min(3.2, Math.max(1, v.z));
+    const l = this.canvas.width;
+    const h = this.canvas.height;
+    v.tx = Math.min(l * 0.5 * v.z, Math.max(-l * 0.5 * v.z, v.tx));
+    v.ty = Math.min(h * 0.5 * v.z, Math.max(-h * 0.5 * v.z, v.ty));
+  }
+
+  // Zoom d'un facteur s autour du point d'écran q (le point sous le doigt reste en place).
+  zoomerVue(s, q) {
+    const v = this.vue;
+    const z = Math.min(3.2, Math.max(1, v.z * s));
+    const e = z / v.z;
+    const cx = this.canvas.width / 2;
+    const cy = this.canvas.height / 2;
+    v.tx = (q.x - cx) - (q.x - cx - v.tx) * e;
+    v.ty = (q.y - cy) - (q.y - cy - v.ty) * e;
+    v.z = z;
+  }
+
+  appliquerVue() {
+    this.limiterVue();
+    if (this.cam) Object.assign(this.cam, this.vue);
+    this.planifierDecor();
+  }
+
+  // Le décor pré-rendu est étiré pendant le geste, puis repeint net une fois la vue stable.
+  planifierDecor() {
+    clearTimeout(this.minuteurDecor);
+    this.minuteurDecor = setTimeout(() => { if (this.cam) this.construire(); }, 140);
+  }
+
+  dessinerDecor(ctx) {
+    const a = this.vueDecor;
+    const b = this.vue;
+    if (a.z === b.z && a.tx === b.tx && a.ty === b.ty) { ctx.drawImage(this.decor, 0, 0); return; }
+    const r = b.z / a.z;
+    const cx = this.canvas.width / 2;
+    const cy = this.canvas.height / 2;
+    ctx.setTransform(r, 0, 0, r, cx * (1 - r) + b.tx - r * a.tx, cy * (1 - r) + b.ty - r * a.ty);
+    ctx.drawImage(this.decor, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  ecouterObservation() {
+    const c = this.canvas;
+    const pts = this.pointes;
+    const milieu = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    const ecart = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    c.addEventListener('pointerdown', (e) => {
+      if (!this.observer) return;
+      try { c.setPointerCapture(e.pointerId); } catch { /* pointeur déjà relâché */ }
+      pts.set(e.pointerId, this.coord(e.clientX, e.clientY));
+      e.preventDefault();
+    });
+    c.addEventListener('pointermove', (e) => {
+      if (!this.observer || !pts.has(e.pointerId)) return;
+      const avant = [...pts.values()];
+      const p = this.coord(e.clientX, e.clientY);
+      pts.set(e.pointerId, p);
+      const apres = [...pts.values()];
+      if (apres.length === 1) {
+        this.vue.tx += p.x - avant[0].x;
+        this.vue.ty += p.y - avant[0].y;
+      } else {
+        const m0 = milieu(avant[0], avant[1]);
+        const m1 = milieu(apres[0], apres[1]);
+        this.vue.tx += m1.x - m0.x;
+        this.vue.ty += m1.y - m0.y;
+        this.zoomerVue(ecart(apres[0], apres[1]) / ecart(avant[0], avant[1]), m1);
+      }
+      this.appliquerVue();
+      e.preventDefault();
+    });
+    const lacher = (e) => pts.delete(e.pointerId);
+    c.addEventListener('pointerup', lacher);
+    c.addEventListener('pointercancel', lacher);
+    c.addEventListener('wheel', (e) => {
+      if (!this.observer) return;
+      this.zoomerVue(Math.exp(-e.deltaY * 0.0015), this.coord(e.clientX, e.clientY));
+      this.appliquerVue();
+      e.preventDefault();
+    }, { passive: false });
   }
 
   ecouter() {
     const c = this.canvas;
+    this.ecouterObservation();
     c.addEventListener('pointerdown', (e) => {
       if (!this.peutViser() || this.drag) return;
       c.setPointerCapture(e.pointerId);
@@ -247,7 +359,7 @@ export class Rendu {
   dessiner(t, dt) {
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(this.decor, 0, 0);
+    this.dessinerDecor(ctx);
     const partie = this.partie;
     if (!partie) return;
     const cam = this.cam;

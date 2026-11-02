@@ -783,6 +783,14 @@ function brancherInterface() {
     else if (solo) demarrerSolo(); else creerDuel();
   });
 
+  // Mode observation : déplacer et zoomer la vue ; le lancer est désactivé tant qu'il est actif.
+  $('btn-observer').addEventListener('click', () => {
+    const actif = rendu.basculerObserver();
+    $('btn-observer').setAttribute('aria-pressed', String(actif));
+    if (actif) $('bandeau').textContent = 'Observation : glissez, pincez. Touchez l\'œil pour lancer.';
+    else if (session) majHud(session);
+  });
+
   $('btn-quitter').addEventListener('click', () => {
     $('quitter-detail').textContent = session?.solo
       ? 'La partie en cours sera perdue.'

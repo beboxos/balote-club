@@ -34,6 +34,10 @@ export class Camera {
     this.f = 1;
     this.cx = 0;
     this.cy = 0;
+    // Vue d'observation : zoom z autour du centre de l'écran puis décalage (tx, ty) en pixels.
+    this.z = 1;
+    this.tx = 0;
+    this.ty = 0;
     this.cadrer();
   }
 
@@ -70,7 +74,15 @@ export class Camera {
   // Terrain (x, y, hauteur) → écran. k = pixels par unité à cette profondeur.
   projeter(x, y, hauteur = 0) {
     const n = this.normalise(x, y, hauteur);
-    return { x: this.cx + this.f * n.x, y: this.cy - this.f * n.y, k: this.f / n.p };
+    let px = this.cx + this.f * n.x;
+    let py = this.cy - this.f * n.y;
+    let k = this.f / n.p;
+    if (this.z !== 1 || this.tx !== 0 || this.ty !== 0) {
+      px = (px - this.l / 2) * this.z + this.l / 2 + this.tx;
+      py = (py - this.h / 2) * this.z + this.h / 2 + this.ty;
+      k *= this.z;
+    }
+    return { x: px, y: py, k };
   }
 
   // Vecteurs d'écran d'une unité de terrain en x et en y, au cercle de lancer : sert à convertir

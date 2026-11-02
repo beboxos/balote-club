@@ -98,6 +98,12 @@ La référence de `tests/determinisme.html` change avec la nouvelle physique : v
 - Tests : `tests/profil.test.mjs` (règles), `tests/profils.e2e.mjs` (33 contrôles contre le vrai serveur : sosies, blocage par appareil, profils partagés, avatars invalides, tables inaccessibles). Purge des profils de test : `delete from public.bal_profils where pseudo ~ '^zz';` dans l'éditeur SQL.
 - Non vérifié : duel entre deux navigateurs avec profils (les fonctions serveur le sont, pas l'enchaînement complet côté jeu) ; photo prise sur un vrai téléphone.
 
+## Retour de jeu n° 9 : mode observer
+
+- **Idée d'un joueur** : « un mode où tu bouges la vue pour observer, et ensuite ton mode de lancer ». Bouton œil dans la barre du bas : en observation, un doigt déplace la vue, deux doigts pincent pour zoomer (molette sur ordinateur), de 1 à 3,2 ×. Le lancer est désactivé tant que le mode est actif ; en ressortant, la vue revient au cadrage normal (aussi à chaque nouvelle partie).
+- **Mise en œuvre** : la `Camera` porte une vue (`z`, `tx`, `ty`) appliquée dans `projeter` ; tout ce qui est dessiné via la caméra (boules, joueurs, sprites, ombres) reste net. Le décor pré-rendu est étiré pendant le geste puis repeint net 140 ms après (`Rendu.planifierDecor`). Physique et duel inchangés.
+- **Régression corrigée** : l'import de `avatarSrc` dans `ecrans.js` (ajout des profils) empêchait de lancer une partie ; livrée par erreur aux commits des profils et corrigée dans celui-ci. Les tests Node ne couvrent pas l'interface : toujours lancer une partie dans le navigateur avant de publier.
+
 ## Vérifié
 
 - Solo complet (navigateur, 375 × 667) : partie menée jusqu'à l'écran de fin, aucune erreur console.
