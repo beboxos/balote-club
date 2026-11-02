@@ -71,7 +71,7 @@ const boutonsAvatars = new Map();   // id de portrait → bouton de la grille
 const ERREURS_COMPTE = {
   pris: "Ce pseudo vient d'être pris. Choisissez-en un autre.",
   invalide: 'Pseudo de 3 à 14 caractères : lettres, chiffres, espace, _ . -',
-  mdp: 'Mot de passe : 4 caractères minimum.',
+  mdp: 'Mot de passe : 6 caractères minimum.',
   limite: 'Trop de pseudos réservés depuis cet appareil.',
   avatar: 'Portrait refusé, choisissez-en un autre.',
   inconnu: 'Aucun pseudo réservé de ce nom.',
@@ -326,7 +326,8 @@ function profil(cote) { return { pseudo: nomJoueur(), avatar: prefs.avatar, cote
 
 function appliquerProfil(s, p) {
   if (!p || (p.cote !== 0 && p.cote !== 1) || p.cote === s.cote || s.verifie?.[p.cote]) return;
-  s.noms[p.cote] = String(p.pseudo || 'Adversaire').slice(0, 14);
+  // Un pseudo annoncé qui ne respecte pas les règles (caractères exotiques, sosie) n'est pas affiché.
+  s.noms[p.cote] = pseudoValide(p.pseudo) ? String(p.pseudo).trim() : 'Adversaire';
   s.avatars[p.cote] = avatarValide(p.avatar) ? p.avatar : '01';
   ui.joueurs(s.noms, s.avatars);
   verifierAdversaire(s);

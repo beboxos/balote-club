@@ -4,7 +4,7 @@ import { AVATARS } from '../config.js';
 
 export const PSEUDO_MIN = 3;
 export const PSEUDO_MAX = 14;
-export const MDP_MIN = 4;
+export const MDP_MIN = 6;
 export const AVATAR_MAX = 20000;   // caractères d'une photo encodée
 
 const INTERDITS = /(merde|pute|connard|connasse|salope|encule|nique|fdp|batard|nazi|hitler|fuck|shit|bitch|cunt|nigg|dick|pussy|asshole|whore|porn)/;
@@ -13,7 +13,7 @@ const PHOTO = /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/;
 export function pseudoValide(p) {
   const s = String(p ?? '').trim();
   if (s.length < PSEUDO_MIN || s.length > PSEUDO_MAX) return false;
-  if (!/^[\p{L}\p{N} _.-]+$/u.test(s)) return false;
+  if (!/^[A-Za-z0-9À-ÖØ-öø-ÿ _.-]+$/.test(s)) return false;
   const nu = s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   return !INTERDITS.test(nu);
 }
