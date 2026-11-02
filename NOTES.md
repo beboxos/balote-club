@@ -17,6 +17,8 @@
 | 9.6 | Total assets ≤ 700 Ko | Un client télécharge environ 330 Ko d'assets (une variante par image, un format audio). Toutes variantes confondues, le dossier fait environ 1,3 Mo | Le budget est lu comme poids transféré par client. AVIF et WebP × 3 largeurs dépasseraient sinon 700 Ko à eux seuls. |
 | 9.3 | Hero : « trois boules et un cochonnet » | Le visuel généré montre davantage de boules, recadrées sur le haut | Meilleur rendu parmi quatre générations SDXL. À régénérer si le nombre exact compte. |
 | 10 | Boutons ≥ 58 px | Boutons d'action à 58 px ; icônes (son, quitter) à 44–48 px | Le bandeau du bas doit laisser le cercle de lancer visible sur 375 × 667. 44 px reste au-dessus du minimum WCAG. |
+| 8 | Lecture « limitée aux membres (ou salon en attente) » | Lecture **limitée aux membres** ; on ne rejoint qu'avec le code exact, via la RPC | Revue de sécurité : sinon, n'importe quel joueur anonyme pouvait lister tous les salons ouverts et leur graine, puis les rejoindre avant l'invité prévu. |
+| 7, 12 | Transport par broadcast `partie:<id>` (`coup`, `abandon`) | Le broadcast n'est plus qu'un **signal**. Un coup n'est appliqué que s'il vient du journal `coups` (auteur garanti par RLS) **et** que son auteur est l'équipe au tour. Un abandon n'est cru que si `parties.statut = 'abandon'` côté serveur. Côté serveur, `seq` doit valoir le prochain numéro (`prochain_seq`) | Revue de sécurité : le canal broadcast est public. Quiconque connaît l'id pouvait injecter un faux coup ou un faux abandon. Le coût est une lecture du journal en plus par coup. |
 | 12 | Score recalculé depuis le journal | En fin de mène, le score affiché vient de `rejouer(graine, journal)`, et non de l'état en mémoire | Conforme. Le point d'accroche `demanderValidation()` (Edge Function `valider_partie`) est prévu dans `reseau.js`, sans implémentation. |
 
 ## Vérifié
@@ -35,6 +37,7 @@ Deux clients Node exécutent les vrais `reseau.js`, `reconnexion.js`, `partie.js
 - **Critère 3** :
   - L'invité est coupé à 14 coups puis relancé. Il garde la même identité anonyme, lit le journal (14 coups), se resynchronise et finit identique.
   - Côté navigateur, l'hôte est rechargé (`?p=CODE`) après 6 coups. Il reprend la partie et finit à 0–5 avec l'empreinte `50b08a9b`, comme l'invité.
+- **Attaques** : un membre qui envoie un `seq` hors séquence est refusé (42501). Un coup déjà pris par l'adversaire est refusé. Un salon en attente est invisible pour un tiers. Des broadcasts `coup` et `abandon` forgés par un intrus n'ont aucun effet sur la partie. Le renvoi d'un coup déjà journalisé est reconnu comme livré.
 - **Critère 4** : un troisième client anonyme ne voit ni la partie ni les coups, son insertion de coup est refusée par RLS, et `rejoindre` répond « Salon plein ». Un code inconnu répond « Salon inexistant ».
 
 ## Non vérifié

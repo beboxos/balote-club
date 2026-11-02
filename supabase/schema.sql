@@ -56,6 +56,17 @@ as $$
   );
 $$;
 
+-- Prochain numéro de coup attendu : impose une séquence continue côté serveur.
+create or replace function public.prochain_seq(p_partie uuid)
+returns int
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select coalesce(max(seq), -1) + 1 from public.coups where partie_id = p_partie;
+$$;
+
 create or replace function public.creer_partie()
 returns setof public.parties
 language plpgsql
@@ -150,13 +161,18 @@ grant execute on function public.creer_partie() to authenticated;
 grant execute on function public.rejoindre_partie(text) to authenticated;
 grant execute on function public.cloturer_partie(uuid, text) to authenticated;
 grant execute on function public.est_membre(uuid) to authenticated;
+revoke all on function public.prochain_seq(uuid) from public, anon;
+grant execute on function public.prochain_seq(uuid) to authenticated;
 
 -- ---------------------------------------------------------------- Policies
 
 drop policy if exists parties_lecture on public.parties;
 create policy parties_lecture on public.parties
   for select to authenticated
-  using (hote = auth.uid() or invite = auth.uid() or statut = 'attente');
+  using (hote = auth.uid() or invite = auth.uid());
+
+-- Les salons en attente ne sont pas listables : on ne rejoint que par le code exact,
+-- via la RPC rejoindre_partie.
 
 -- Aucune policy insert/update/delete sur parties : tout passe par les RPC.
 
@@ -172,6 +188,7 @@ create policy coups_insertion on public.coups
     auteur = auth.uid()
     and public.est_membre(partie_id)
     and exists (select 1 from public.parties p where p.id = partie_id and p.statut = 'en_cours')
+    and seq = public.prochain_seq(partie_id)
   );
 
 -- Point d'accroche futur : Edge Function « valider_partie » (re-simulation serveur du

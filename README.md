@@ -30,8 +30,9 @@ Puis ouvrir `http://localhost:8737/`. Le solo fonctionne sans aucune configurati
 Ce que le schéma garantit :
 
 - RLS active sur `parties` et `coups` ;
-- lecture d'une partie réservée à ses membres (ou à un salon encore en attente) ;
-- insertion d'un coup réservée aux membres, avec `auteur = auth.uid()`, et seulement pour une partie `en_cours` ;
+- lecture d'une partie réservée à ses membres ; un salon ne se rejoint qu'avec son code exact ;
+- insertion d'un coup réservée aux membres, avec `auteur = auth.uid()`, seulement pour une partie `en_cours` et seulement au prochain `seq` ;
+- le canal broadcast n'est qu'un signal : les clients n'appliquent que les coups du journal dont l'auteur est l'équipe au tour ;
 - index unique `(partie_id, seq)` : un coup en double est rejeté par le serveur ;
 - `creer_partie()` tire le code et la graine côté serveur ;
 - `rejoindre_partie(code)` refuse l'auto-jointure et accepte un seul invité, avec un message explicite si le salon est plein, terminé ou inexistant.

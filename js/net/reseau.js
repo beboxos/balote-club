@@ -63,13 +63,15 @@ export async function chargerCoups(partieId, depuis = 0) {
     .order('seq', { ascending: true }));
 }
 
-// Transport d'une partie : broadcast Realtime `partie:<id>` (coup, abandon, profil),
-// doublé d'un abonnement aux insertions de `coups` (journal = source de vérité).
+// Transport d'une partie. Le canal broadcast `partie:<id>` est public : n'importe qui
+// connaissant l'id peut y émettre. Ses messages ne sont donc que des signaux ; les coups
+// appliqués viennent uniquement du journal `coups` (auteur garanti par RLS), via
+// postgres_changes ou une relecture déclenchée par le signal.
 export class Reseau {
-  constructor(partie, uid, { onCoup, onAbandon, onProfil, onArrivee, onEtat } = {}) {
+  constructor(partie, uid, { onCoup, onSignal, onAbandon, onProfil, onArrivee, onEtat } = {}) {
     this.partie = partie;
     this.uid = uid;
-    this.cb = { onCoup, onAbandon, onProfil, onArrivee, onEtat };
+    this.cb = { onCoup, onSignal, onAbandon, onProfil, onArrivee, onEtat };
     this.canal = null;
     this.enAttente = [];
     this.ferme = false;
@@ -80,8 +82,8 @@ export class Reseau {
     if (this.canal) await c.removeChannel(this.canal);
     const id = this.partie.id;
     this.canal = c.channel('partie:' + id, { config: { broadcast: { self: false } } })
-      .on('broadcast', { event: 'coup' }, ({ payload }) => this.cb.onCoup?.(payload))
-      .on('broadcast', { event: 'abandon' }, ({ payload }) => this.cb.onAbandon?.(payload))
+      .on('broadcast', { event: 'coup' }, () => this.cb.onSignal?.())
+      .on('broadcast', { event: 'abandon' }, () => this.verifierAbandon())
       .on('broadcast', { event: 'profil' }, ({ payload }) => this.cb.onProfil?.(payload))
       .on('broadcast', { event: 'arrivee' }, ({ payload }) => this.cb.onArrivee?.(payload))
       .on('postgres_changes',
@@ -102,7 +104,13 @@ export class Reseau {
     await this.vider();
   }
 
-  async vider() {
+  // Un seul envoi à la fois : les renvois (reconnexion) ne doublent pas les insertions.
+  vider() {
+    this.envoi = (this.envoi || Promise.resolve()).catch(() => false).then(() => this.envoyerFile());
+    return this.envoi;
+  }
+
+  async envoyerFile() {
     const c = await sb();
     while (this.enAttente.length) {
       const coup = this.enAttente[0];
@@ -110,23 +118,39 @@ export class Reseau {
         partie_id: this.partie.id, auteur: this.uid,
         seq: coup.seq, angle: coup.angle, puissance: coup.puissance,
       });
-      // 23505 : déjà journalisé (renvoi après coupure) — on considère le coup livré.
-      if (error && error.code !== '23505') {
+      // Refus après une coupure : le coup peut déjà être journalisé (23505, ou 42501 car
+      // le seq n'est plus le prochain attendu). S'il est bien à nous, il est livré.
+      if (error && !(await this.dejaJournalise(c, coup.seq))) {
         this.derniereErreur = error;
         return false;
       }
       this.enAttente.shift();
-      this.diffuser('coup', coup);
+      this.diffuser('coup', { seq: coup.seq });
     }
     return true;
+  }
+
+  async dejaJournalise(c, seq) {
+    const { data } = await c.from('coups').select('auteur')
+      .eq('partie_id', this.partie.id).eq('seq', seq).maybeSingle();
+    return data?.auteur === this.uid;
+  }
+
+  // Un abandon n'est cru que si le serveur l'a enregistré (RPC réservée aux membres).
+  async verifierAbandon() {
+    try {
+      const c = await sb();
+      const { data } = await c.from('parties').select('statut').eq('id', this.partie.id).maybeSingle();
+      if (data?.statut === 'abandon') this.cb.onAbandon?.();
+    } catch { /* on réessaiera au prochain signal */ }
   }
 
   envoyerProfil(profil) { this.diffuser('profil', profil); }
   annoncerArrivee(profil) { this.diffuser('arrivee', profil); }
 
   async abandonner() {
-    this.diffuser('abandon', { uid: this.uid });
     await this.cloturer('abandon');
+    this.diffuser('abandon', {});
   }
 
   async cloturer(statut) {

@@ -132,8 +132,11 @@ const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const attendreFrame = () => new Promise((ok) => requestAnimationFrame(ok));
 
 export class Partie {
-  constructor({ graine, cote = 0, reseau = null, onTour, onCoup, onFin, onManche, onAnnulee }) {
+  // equipeAuteur(uid) → 0 / 1 / -1 : en duel, un coup distant n'est accepté que si son
+  // auteur (garanti par RLS dans le journal) est bien l'équipe dont c'est le tour.
+  constructor({ graine, cote = 0, reseau = null, equipeAuteur = null, onTour, onCoup, onFin, onManche, onAnnulee }) {
     this.graine = graine;
+    this.equipeAuteur = equipeAuteur;
     this.cote = cote;
     this.reseau = reseau;
     this.cb = { onTour, onCoup, onFin, onManche, onAnnulee };
@@ -166,11 +169,12 @@ export class Partie {
     return true;
   }
 
-  // Coup reçu du réseau : seq strictement attendu, tour adverse, sinon ignoré.
+  // Coup reçu du journal : seq strictement attendu, auteur de l'équipe au tour, sinon ignoré.
   recevoirCoup(coup) {
     if (coup.seq !== this.journal.length + this.attente) return false;
     this.executer({
       seq: coup.seq,
+      auteur: coup.auteur,
       angle: normaliserAngle(coup.angle),
       puissance: normaliserPuissance(coup.puissance),
     }, true);
@@ -183,6 +187,7 @@ export class Partie {
       this.attente--;
       if (coup.seq !== this.journal.length || this.moteur.fini) return;
       if (distant && this.moteur.tour === this.cote) return;
+      if (distant && this.equipeAuteur && this.equipeAuteur(coup.auteur) !== this.moteur.tour) return;
       this.journal.push(coup);
       this.enVol = true;
       const boule = this.moteur.preparer(coup.angle, coup.puissance);
@@ -237,15 +242,20 @@ export class Partie {
 
   // Resynchronisation : reconstruit l'état depuis le journal complet du serveur.
   resynchroniser(coups) {
+    if (this.enVol) return false;
     const tries = coups.slice().sort((a, b) => a.seq - b.seq);
     const valides = [];
+    const m = new Moteur(this.graine);
     for (const c of tries) {
-      if (c.seq !== valides.length) break;
-      valides.push({ seq: c.seq, angle: normaliserAngle(c.angle), puissance: normaliserPuissance(c.puissance) });
+      if (c.seq !== valides.length || m.fini) break;
+      if (this.equipeAuteur && this.equipeAuteur(c.auteur) !== m.tour) break;
+      const coup = { seq: c.seq, angle: normaliserAngle(c.angle), puissance: normaliserPuissance(c.puissance) };
+      valides.push(coup);
+      m.jouerInstantane(coup.angle, coup.puissance);
     }
-    if (valides.length <= this.journal.length || this.enVol) return false;
+    if (valides.length <= this.journal.length) return false;
     this.journal = valides;
-    this.moteur = rejouer(this.graine, valides);
+    this.moteur = m;
     if (this.moteur.fini) this.cb.onFin?.(this.moteur.scores.slice());
     else this.cb.onTour?.(this.moteur.tour);
     return true;

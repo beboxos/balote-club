@@ -58,8 +58,12 @@ function majHud(s, texte) {
 }
 
 function creerPartie(s, graine, cote, reseau) {
+  const ligne = s.ligne;
+  const equipeAuteur = ligne
+    ? (uid) => (uid === ligne.hote ? 0 : uid === ligne.invite ? 1 : -1)
+    : null;
   const partie = new Partie({
-    graine, cote, reseau,
+    graine, cote, reseau, equipeAuteur,
     onCoup: () => {
       audio.jouer('lancer', { volume: 0.8 });
       majHud(s, '');
@@ -167,6 +171,7 @@ async function ouvrirDuel(ligne, uid) {
   };
   s.reseau = new Reseau(ligne, uid, {
     onCoup: (c) => s.partie?.recevoirCoup(c),
+    onSignal: () => s.reconnexion?.resynchroniser(),
     onAbandon: () => { if (s.partie && !s.termine) terminer(s, s.partie.moteur.scores, { abandon: true }); },
     onProfil: (p) => appliquerProfil(s, p),
     onArrivee: (p) => {
@@ -189,8 +194,16 @@ async function ouvrirDuel(ligne, uid) {
 }
 
 async function commencerDuel(s) {
-  if (s.partie || session !== s) return;
+  if (s.partie || s.demarrage || session !== s) return;
   clearInterval(s.sondage);
+  // L'identité de l'invité sert à vérifier l'auteur de chaque coup : on la relit au serveur.
+  if (!s.ligne.invite) {
+    s.demarrage = true;
+    const l = await chargerPartie(s.ligne.code).catch(() => null);
+    s.demarrage = false;
+    if (!l?.invite || session !== s || s.partie) return;
+    s.ligne = l;
+  }
   const partie = creerPartie(s, Number(s.ligne.seed), s.cote, s.reseau);
   s.reconnexion = new Reconnexion(s.reseau, partie, {
     onStatut: (st) => {
