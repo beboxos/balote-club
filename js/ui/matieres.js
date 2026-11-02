@@ -43,10 +43,18 @@ function bruitValeur(taille, cellules, rng) {
   return out;
 }
 
-let motifArgile = null;
+const motifs = new Map();
 
-export function textureArgile(ctx) {
-  if (motifArgile) return motifArgile;
+// Palette et grain par surface : lisse = terre damée claire, terre = ocre, gravier = gris-beige piqué.
+const PALETTES = {
+  lisse: { A: [0xc4, 0xa2, 0x7c], B: [0xaa, 0x88, 0x66], grains: 120, grain: 'rgba(245,228,205,' },
+  terre: { A: [0xb0, 0x8a, 0x66], B: [0x8e, 0x6a, 0x4b], grains: 260, grain: 'rgba(235,215,190,' },
+  gravier: { A: [0xa8, 0x9c, 0x88], B: [0x82, 0x76, 0x66], grains: 900, grain: 'rgba(222,214,200,' },
+};
+
+export function textureArgile(ctx, sol = 'terre') {
+  if (motifs.has(sol)) return motifs.get(sol);
+  const pal = PALETTES[sol] || PALETTES.terre;
   const T = 256;
   const rng = mulberry32(0xa161e);
   const o1 = bruitValeur(T, 16, rng);
@@ -55,8 +63,7 @@ export function textureArgile(ctx) {
   const g = c.getContext('2d');
   const img = g.createImageData(T, T);
   // Terre battue : sable ocre, un peu plus sombre dans les creux
-  const A = [0xb0, 0x8a, 0x66];
-  const B = [0x8e, 0x6a, 0x4b];
+  const { A, B } = pal;
   for (let i = 0; i < T * T; i++) {
     const grain = rng() * 0.18;
     const v = o1[i] * 0.62 + o2[i] * 0.38 + grain - 0.09;
@@ -68,18 +75,19 @@ export function textureArgile(ctx) {
   }
   g.putImageData(img, 0, 0);
   // Gravillons clairs épars
-  for (let i = 0; i < 260; i++) {
-    g.fillStyle = `rgba(235,215,190,${0.1 + rng() * 0.16})`;
+  for (let i = 0; i < pal.grains; i++) {
+    g.fillStyle = `${pal.grain}${0.1 + rng() * 0.16})`;
     g.beginPath();
     g.arc(rng() * T, rng() * T, 0.4 + rng() * 0.9, 0, Math.PI * 2);
     g.fill();
   }
-  motifArgile = ctx.createPattern(c, 'repeat');
-  return motifArgile;
+  const motif = ctx.createPattern(c, 'repeat');
+  motifs.set(sol, motif);
+  return motif;
 }
 
 // Terrain complet pré-composé dans un canvas (recalculé au redimensionnement seulement).
-export function dessinerTerrain(ctx, l, h, marge) {
+export function dessinerTerrain(ctx, l, h, marge, sol = 'terre') {
   const fond = ctx.createLinearGradient(0, 0, 0, h);
   fond.addColorStop(0, '#9b7856');
   fond.addColorStop(1, '#836445');
@@ -98,7 +106,7 @@ export function dessinerTerrain(ctx, l, h, marge) {
   ctx.fillStyle = fond;
   ctx.fillRect(marge, marge, l - 2 * marge, h - 2 * marge);
   ctx.globalAlpha = 0.9;
-  ctx.fillStyle = textureArgile(ctx);
+  ctx.fillStyle = textureArgile(ctx, sol);
   ctx.fillRect(marge, marge, l - 2 * marge, h - 2 * marge);
   ctx.globalAlpha = 1;
   // Lumière rasante de fin de journée, depuis le haut-gauche

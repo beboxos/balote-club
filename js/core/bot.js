@@ -1,4 +1,4 @@
-import { step, ajouterBoule, lancer, LANCER, PORTEE } from './physique.js';
+import { step, ajouterBoule, lancer, LANCER, portee } from './physique.js';
 import { meilleures } from './partie.js';
 import { gauss } from './rng.js';
 
@@ -19,7 +19,7 @@ function versCible(x, y) {
 }
 
 function cloner(etat) {
-  return { objets: etat.objets.map((o) => ({ ...o })), pas: 0, chocs: [] };
+  return { objets: etat.objets.map((o) => ({ ...o })), sol: etat.sol, cailloux: etat.cailloux, pas: 0, chocs: [] };
 }
 
 // Valeur d'une position pour l'équipe : marge d'avance sur l'adversaire.
@@ -45,6 +45,15 @@ export function choisirCoup(moteur, niveau, rng) {
   const equipe = moteur.tour;
   const etat = moteur.etat;
   const jack = etat.objets[0];
+  const PORTEE = portee(etat.sol);
+
+  // Début de mène : lancer le cochonnet droit devant, à distance variable.
+  if (moteur.phase === 'cochonnet') {
+    return {
+      angle: Math.round(27000 + (rng() - 0.5) * 500),
+      puissance: 0.25 + rng() * 0.6,
+    };
+  }
 
   // Candidat de base : pointer au cochonnet.
   const cible = versCible(jack.x, jack.y);

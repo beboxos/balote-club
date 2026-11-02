@@ -1,4 +1,4 @@
-import { TERRAIN, LANCER, RAYON, PORTEE_AIR, sinCos, distance } from '../core/physique.js';
+import { TERRAIN, LANCER, RAYON, PORTEE_AIR, sinCos, distance, puissanceCochonnet } from '../core/physique.js';
 import { meilleures } from '../core/partie.js';
 import { dessinerTerrain, spriteBoule, Effets, viderCaches } from './matieres.js';
 import { Camera, peindreDecor, ombreSol, anneauSol, cochonnet, trajectoire, jauge, GROSSISSEMENT } from './vue3d.js';
@@ -9,7 +9,7 @@ const PUISSANCE_MIN = 0.04;
 const ANGLE_DEFAUT = 27000;
 const MAIN_LACHER = 28;  // hauteur de la main au lâcher, point de départ de la cloche
 const TEX = 2;            // pixels de texture par unité du terrain
-const GROSSISSEMENT_JACK = 2.2;
+const GROSSISSEMENT_JACK = 1.54;   // cochonnet : 30 % plus petit qu'avant (2,2)
 const SPRITE_R = 40;      // rayon de référence des sprites de boule, réduit ou agrandi au dessin
 const DUREE_GESTE = 560;  // ms ; la boule part à RELACHE × DUREE_GESTE
 const RELACHE = 0.68;
@@ -35,6 +35,7 @@ export class Rendu {
     this.effets = new Effets();
     this.decor = document.createElement('canvas');
     this.texture = null;
+    this.solId = null;
     this.cam = null;
     this.visee = null;           // { cd, p } pendant le geste ou au clavier
     this.drag = null;
@@ -56,6 +57,13 @@ export class Rendu {
     this.geste = null;
     this.vol = null;
     this.effets.vider();
+    // Le sol de la partie décide de la texture de la piste.
+    const sol = partie?.moteur.sol.id ?? this.solId;
+    if (sol && sol !== this.solId) {
+      this.solId = sol;
+      this.texture = null;
+      if (this.cam) this.construire();
+    }
   }
 
   demarrer() {
@@ -81,17 +89,22 @@ export class Rendu {
     this.rect = rect;
     this.unite = h / TERRAIN.h;   // pixels d'écran par unité, pour convertir le geste du doigt
     viderCaches();
+    this.cam = new Camera(l, h);
+    this.construire();
+  }
+
+  // Décor statique : texture de la piste (selon le sol) projetée par la caméra.
+  construire() {
     if (!this.texture) {
       this.texture = document.createElement('canvas');
       this.texture.width = TERRAIN.l * TEX;
       this.texture.height = TERRAIN.h * TEX;
       const t = this.texture.getContext('2d');
       t.scale(TEX, TEX);
-      dessinerTerrain(t, TERRAIN.l, TERRAIN.h, TERRAIN.marge);
+      dessinerTerrain(t, TERRAIN.l, TERRAIN.h, TERRAIN.marge, this.solId || 'terre');
     }
-    this.cam = new Camera(l, h);
-    this.decor.width = l;
-    this.decor.height = h;
+    this.decor.width = this.canvas.width;
+    this.decor.height = this.canvas.height;
     peindreDecor(this.decor.getContext('2d'), this.cam, this.texture, TEX);
   }
 
@@ -253,14 +266,18 @@ export class Rendu {
     const objets = etat.objets;
     // Boules en l'air : la physique donne le vol restant, on en tire hauteur et décalage visuels.
     const aeriennes = [];
-    for (let i = 1; i < objets.length; i++) {
+    for (let i = 0; i < objets.length; i++) {
       const o = objets[i];
       if (o.vivant && o.air > 0) aeriennes.push(i);
     }
 
-    // Ombres puis corps, du fond vers le premier plan.
+    this.dessinerCailloux(ctx, etat);
+
+    // Ombres puis corps, du fond vers le premier plan (le cochonnet tenu en main n'est pas au sol).
     const ordre = [];
-    for (let i = 0; i < objets.length; i++) if (objets[i].vivant && !(objets[i].air > 0)) ordre.push(i);
+    for (let i = 0; i < objets.length; i++) {
+      if (objets[i].vivant && !(objets[i].air > 0) && !objets[i].enMain) ordre.push(i);
+    }
     ordre.sort((a, b) => objets[a].y - objets[b].y);
     for (const i of ordre) {
       const o = objets[i];
@@ -300,30 +317,37 @@ export class Rendu {
     const enMain = this.bouleEnMain();
     if (g && !g.lache) {
       g.main = mains[g.equipe];
-      this.bouleMain(ctx, g.main, g.equipe, objets.length, 1);
+      if (objets[0].enMain) this.jackMain(ctx, g.main, t);
+      else this.bouleMain(ctx, g.main, g.equipe, objets.length, 1);
     } else if (enMain && mains[enMain.equipe]) {
-      this.bouleMain(ctx, mains[enMain.equipe], enMain.equipe, enMain.index, enMain.alpha);
+      if (enMain.jack) this.jackMain(ctx, mains[enMain.equipe], t, enMain.alpha);
+      else this.bouleMain(ctx, mains[enMain.equipe], enMain.equipe, enMain.index, enMain.alpha);
     }
     // Les boules en l'air passent au-dessus de tout, avec leur ombre au sol décalée.
     for (const i of aeriennes) {
       const o = objets[i];
       const k = 1 - o.air / o.air0;
-      const h = RAYON + (MAIN_LACHER - RAYON) * (1 - k) + o.arc * 4 * k * (1 - k);
+      const h = o.r + (MAIN_LACHER - o.r) * (1 - k) + o.arc * 4 * k * (1 - k);
       const main = this.vol?.main;
       const e = (1 - k) ** 4;
       const x = o.x + (main ? (main.x - LANCER.x) * e : 0);
       const y = o.y + (main ? (main.y - LANCER.y) * e : 0);
-      ombreSol(ctx, cam, x, y, RAYON, 0.42, h - RAYON);
+      ombreSol(ctx, cam, x, y, o.r, 0.42, h - o.r);
       const c = cam.projeter(x, y, h);
-      this.spriteAt(ctx, c.x, c.y, RAYON * c.k * GROSSISSEMENT * (1 + (h - RAYON) / 160), o.equipe, i, 1);
+      const echelle = 1 + (h - o.r) / 160;
+      if (i === 0) cochonnet(ctx, c.x, c.y, o.r * c.k * GROSSISSEMENT_JACK * echelle, t, reduit.matches);
+      else this.spriteAt(ctx, c.x, c.y, o.r * c.k * GROSSISSEMENT * echelle, o.equipe, i, 1);
     }
 
     this.effets.dessinerParticules(ctx, cam);
   }
 
   // Trajectoire prévue (sans la dispersion du lancer) : de la main au point de chute.
-  courbe(cd, p) {
+  courbe(cd, pGeste) {
     const { s, c } = sinCos(cd);
+    // Cochonnet : le geste est étalé sur la fourchette de distance autorisée.
+    const m = this.partie.moteur;
+    const p = m.phase === 'cochonnet' ? puissanceCochonnet(pGeste, m.sol) : pGeste;
     const portee = PORTEE_AIR * p;
     const arc = 20 + 120 * Math.sqrt(p);
     const pts = [];
@@ -341,6 +365,28 @@ export class Rendu {
   boule(ctx, x, y, r, equipe, index, alpha) {
     const c = this.cam.projeter(x, y, r);
     this.spriteAt(ctx, c.x, c.y, r * c.k * GROSSISSEMENT, equipe, index, alpha);
+  }
+
+  // Cochonnet tenu en main (taille du cochonnet qui roule).
+  jackMain(ctx, main, t, alpha = 1) {
+    const c = this.cam.projeter(main.x, main.y, main.z);
+    if (alpha !== 1) ctx.globalAlpha = alpha;
+    cochonnet(ctx, c.x, c.y, 4.5 * c.k * GROSSISSEMENT_JACK, t, true);
+    if (alpha !== 1) ctx.globalAlpha = 1;
+  }
+
+  // Petits cailloux de la piste : posés au sol, avec leur ombre.
+  dessinerCailloux(ctx, etat) {
+    const cam = this.cam;
+    for (const k of etat.cailloux) {
+      ombreSol(ctx, cam, k.x, k.y, k.r * 1.3, 0.28);
+      const c = cam.projeter(k.x, k.y, k.r * 0.5);
+      const r = k.r * c.k * 1.15;
+      ctx.fillStyle = '#6f675c';
+      ctx.beginPath(); ctx.ellipse(c.x, c.y, r, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(235,228,214,.55)';
+      ctx.beginPath(); ctx.ellipse(c.x - r * 0.25, c.y - r * 0.3, r * 0.45, r * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
   // Dans la main d'un joueur rapetissé : boule plus petite que celle qui roule.
@@ -363,6 +409,7 @@ export class Rendu {
     const p = this.partie;
     if (!p || p.enVol || p.fini || p.vue) return null;
     const m = p.moteur;
+    if (m.phase === 'cochonnet') return { equipe: m.tour, jack: true, alpha: p.estJoueurLocal(m.tour) ? 1 : 0.7 };
     if (m.restantes(m.tour) <= 0) return null;
     return {
       equipe: m.tour,

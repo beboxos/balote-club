@@ -1,7 +1,7 @@
 # Balote Club
 
 Pétanque tour par tour, mobile d'abord, vue 3D isométrique, lancer en cloche : solo contre le club
-(3 niveaux, 3 ou 6 boules) ou duel à distance (3 boules), ou à deux sur le même téléphone. Site 100 % statique (HTML, CSS, modules ES natifs), hébergé sur GitHub Pages ;
+(3 niveaux, 3 ou 6 boules, 3 terrains : lisse, terre, gravier) ou duel à distance (3 boules), ou à deux sur le même téléphone. Site 100 % statique (HTML, CSS, modules ES natifs), hébergé sur GitHub Pages ;
 le duel passe par Supabase (auth anonyme, Postgres, Realtime).
 
 ## Lancer en local
@@ -72,7 +72,7 @@ node tests/duel.test.mjs       # deux clients en mémoire + reprise depuis le jo
 
 **Déterminisme iOS / Android (critère 5)** : ouvrir `tests/determinisme.html` sur chaque
 appareil et comparer l'empreinte affichée. Valeur de référence (Node 24, Chromium) :
-`632e05f1`, scores 5–3 à la mène 4.
+`63f0c7d5`, scores 2–5 à la mène 6.
 
 ## Assets
 

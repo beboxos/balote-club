@@ -54,6 +54,15 @@ La référence de `tests/determinisme.html` change avec la nouvelle physique : v
 | Vue | Caméra en hauteur, axée sur le terrain | Même caméra pivotée de 35° (type isométrique), cadrée automatiquement sur la piste et les joueurs | Retour de jeu. La piste est plaquée par triangles texturés et les volumes n'affichent que leurs faces visibles. Le glissement du doigt est converti en direction du terrain selon la rotation. |
 | Deux joueurs | Solo ou duel en ligne | Mode « 2 joueurs, un téléphone » : chacun joue à son tour, un écran « Au tour de X, passez le téléphone » apparaît quand le tour change de joueur et le jeu attend le bouton Prêt | Demande de l'utilisateur. Aucun réseau ni bot ; 3 ou 6 boules au choix, comme en solo. |
 
+## Retour de jeu n° 4 : terrains, cailloux, cochonnet lancé
+
+- **Le terrain roulait trop peu** : le roulement après l'atterrissage est maintenant réglé par un sol (`SOLS` dans `physique.js`). Lisse : frottement 260, rebond 0,5. Terre (défaut) : 380 et 0,45, soit environ 2,3 fois plus de roulement qu'avant. Gravier : 620 et 0,36, proche de l'ancien comportement. Le choix est dans le menu (solo et deux joueurs). Le duel en ligne reste sur « terre » : le sol n'est pas dans le schéma Supabase.
+- **Cailloux** : semés à chaque mène depuis la graine (`semerCailloux`) : 0 sur lisse, 5 sur terre, 12 sur gravier. Un objet qui roule sur un caillou est dévié de 3 à 9° du côté opposé, freiné de 5 %, une seule fois par caillou et par déplacement. Même résultat sur les deux appareils (arithmétique simple, masque de bits dans `o.cai`).
+- **Cochonnet** : le premier joueur de chaque mène le lance (c'est un coup du journal, `phase === 'cochonnet'`), puis lance aussi la première boule. Le geste 0..1 est étalé sur 330 à 450 unités : ni trop près, ni trop loin, l'angle restant libre. Sorti du terrain, il est relancé, et posé d'office après deux lancers nuls.
+- **Taille du cochonnet** : rendu réduit de 30 % (facteur 2,2 → 1,54). Le rayon physique ne change pas.
+- Le portée n'est plus une constante : `portee(sol)`. Empreinte de référence recalculée : `63f0c7d5`, 2–5 à la mène 6.
+- Non vérifié : ressenti réel du roulement et des cailloux au toucher, équilibrage du bot sur les nouveaux sols, duel entre deux navigateurs avec le lancer du cochonnet.
+
 ## Vérifié
 
 - Solo complet (navigateur, 375 × 667) : partie menée jusqu'à l'écran de fin, aucune erreur console.

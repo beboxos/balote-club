@@ -1,5 +1,6 @@
 import { AVATARS, STOCKAGE } from './config.js';
 import { Partie, BOULES_DEFAUT, BOULES_CHOIX } from './core/partie.js';
+import { SOLS, SOL_DEFAUT } from './core/physique.js';
 import { jouerBot, NIVEAUX } from './core/bot.js';
 import { mulberry32 } from './core/rng.js';
 import { Rendu } from './ui/rendu.js';
@@ -21,7 +22,9 @@ const prefs = {
   avatar: AVATARS.includes(lire(STOCKAGE.avatar, '01')) ? lire(STOCKAGE.avatar, '01') : '01',
   niveau: Math.min(2, Math.max(0, Number(lire(STOCKAGE.niveau, '1')) || 0)),
   boules: BOULES_CHOIX.includes(Number(lire(STOCKAGE.boules, ''))) ? Number(lire(STOCKAGE.boules, '')) : BOULES_DEFAUT,
+  sol: SOLS[lire(STOCKAGE.sol, '')] ? lire(STOCKAGE.sol, '') : SOL_DEFAUT,
 };
+const IDS_SOLS = Object.keys(SOLS);
 
 // Session courante : solo ou duel.
 let session = null;
@@ -43,8 +46,10 @@ function nomJoueur() { return prefs.pseudo.trim() || 'Vous'; }
 function texteTour(s) {
   const p = s.partie;
   if (p.fini) return '';
-  if (s.local) return `${s.noms[p.tour]}, à vous de jouer`;
-  if (p.tour === p.cote) return 'À vous de jouer';
+  const jack = p.moteur.phase === 'cochonnet';
+  if (s.local) return jack ? `${s.noms[p.tour]}, lancez le cochonnet` : `${s.noms[p.tour]}, à vous de jouer`;
+  if (p.tour === p.cote) return jack ? 'Lancez le cochonnet' : 'À vous de jouer';
+  if (jack) return `${s.noms[p.tour]} lance le cochonnet…`;
   return s.solo ? `${s.noms[p.tour]} vise…` : `${s.noms[p.tour]} joue…`;
 }
 
@@ -65,7 +70,7 @@ function creerPartie(s, graine, cote, reseau) {
     ? (uid) => (uid === ligne.hote ? 0 : uid === ligne.invite ? 1 : -1)
     : null;
   const partie = new Partie({
-    graine, cote, reseau, equipeAuteur, boules: s.boules, local: !!s.local,
+    graine, cote, reseau, equipeAuteur, boules: s.boules, sol: s.sol, local: !!s.local,
     avantLancer: ({ equipe, coup }) => rendu.lancerGeste(equipe, coup.puissance),
     onCoup: () => {
       audio.jouer('lancer', { volume: 0.8 });
@@ -76,7 +81,7 @@ function creerPartie(s, graine, cote, reseau) {
       if (s.local) passerLeTelephone(s, equipe);
       else if (s.solo && equipe !== cote) jouerBot(partie, s.niveau, s.rng);
     },
-    onAnnulee: () => majHud(s, 'Cochonnet sorti : mène rejouée'),
+    onAnnulee: () => majHud(s, 'Cochonnet sorti : on le relance'),
     onManche: (ev) => {
       const texte = ev.gagnant < 0
         ? 'Mène nulle'
@@ -141,6 +146,7 @@ function demarrerSolo() {
     solo: true,
     niveau: prefs.niveau,
     boules: prefs.boules,
+    sol: prefs.sol,
     rng: mulberry32(graine ^ 0x5eed),
     noms: [nomJoueur(), 'Le club'],
     avatars: [prefs.avatar, avatarBot],
@@ -158,6 +164,7 @@ function demarrerLocal() {
     solo: true,
     local: true,
     boules: prefs.boules,
+    sol: prefs.sol,
     vu: 0,   // équipe qui tient le téléphone
     noms: [prefs.pseudo.trim() || 'Joueur 1', 'Joueur 2'],
     avatars: [prefs.avatar, prefs.avatar === '02' ? '03' : '02'],
@@ -412,6 +419,23 @@ function brancherInterface() {
     ecrire(STOCKAGE.boules, String(prefs.boules));
     majBoules();
     segB[BOULES_CHOIX.indexOf(prefs.boules)].focus();
+  });
+
+  const segS = document.querySelectorAll('.segment [data-sol]');
+  const majSol = () => segS.forEach((b) => b.setAttribute('aria-checked', String(b.dataset.sol === prefs.sol)));
+  majSol();
+  segS.forEach((b) => b.addEventListener('click', () => {
+    prefs.sol = b.dataset.sol;
+    ecrire(STOCKAGE.sol, prefs.sol);
+    majSol();
+  }));
+  document.querySelector('.segment--sol').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const i = IDS_SOLS.indexOf(prefs.sol);
+    prefs.sol = IDS_SOLS[(i + (e.key === 'ArrowRight' ? 1 : IDS_SOLS.length - 1)) % IDS_SOLS.length];
+    ecrire(STOCKAGE.sol, prefs.sol);
+    majSol();
+    segS[IDS_SOLS.indexOf(prefs.sol)].focus();
   });
 
   $('btn-solo').addEventListener('click', demarrerSolo);

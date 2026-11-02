@@ -1,6 +1,6 @@
 import {
   creerEtat, ajouterBoule, lancer, step, distance,
-  normaliserAngle, normaliserPuissance, PAS,
+  normaliserAngle, normaliserPuissance, puissanceCochonnet, PAS, LANCER, SOLS, SOL_DEFAUT,
 } from './physique.js';
 import { deriver, mulberry32 } from './rng.js';
 
@@ -20,10 +20,29 @@ function bruit(graine, n) {
   return { angle: tirer() * DISPERSION_ANGLE, puissance: tirer() * DISPERSION_PORTEE };
 }
 
-// Cochonnet dans le tiers haut de la piste, tiré de la graine serveur (entiers seulement).
+// Le premier joueur de la mène lance le cochonnet. Après ce nombre de lancers nuls (sorti du
+// terrain), le cochonnet est posé d'office pour ne pas bloquer la partie.
+const ESSAIS_COCHONNET = 2;
+
+// Position d'office du cochonnet, tirée de la graine serveur (entiers seulement).
 export function positionJack(graine, mene, essai) {
   const h = deriver(graine, mene * 32 + essai);
   return { x: 100 + (h % 161), y: 80 + ((h >>> 9) % 121) };
+}
+
+// Petits cailloux semés sur la piste : positions et déviations tirées de la graine serveur.
+export function semerCailloux(graine, mene, essai, nombre) {
+  const rng = mulberry32(deriver(graine, 700000 + mene * 32 + essai));
+  const liste = [];
+  for (let k = 0; k < nombre; k++) {
+    liste.push({
+      x: 65 + Math.floor(rng() * 230),
+      y: 95 + Math.floor(rng() * 380),
+      r: 3 + Math.floor(rng() * 3),
+      d: (6 + Math.floor(rng() * 10)) / 100,
+    });
+  }
+  return liste;
 }
 
 // Meilleure distance au cochonnet par équipe (Infinity si aucune boule vivante).
@@ -56,9 +75,10 @@ export function compterMene(etat) {
 
 // Moteur de règles pur : aucune notion de temps ni de réseau.
 export class Moteur {
-  constructor(graine, boules = BOULES_DEFAUT) {
+  constructor(graine, boules = BOULES_DEFAUT, sol = SOL_DEFAUT) {
     this.graine = graine;
     this.boules = boules;
+    this.sol = SOLS[sol] || SOLS[SOL_DEFAUT];
     this.lancers = 0;
     this.scores = [0, 0];
     this.mene = 1;
@@ -69,7 +89,15 @@ export class Moteur {
   }
 
   nouvelleMene() {
-    this.etat = creerEtat(positionJack(this.graine, this.mene, this.essai));
+    const cailloux = semerCailloux(this.graine, this.mene, this.essai, this.sol.cailloux);
+    if (this.essai >= ESSAIS_COCHONNET) {
+      this.etat = creerEtat(positionJack(this.graine, this.mene, this.essai), this.sol, cailloux);
+      this.phase = 'boules';
+    } else {
+      this.etat = creerEtat(LANCER, this.sol, cailloux);
+      this.etat.objets[0].enMain = true;
+      this.phase = 'cochonnet';
+    }
     this.jouees = [0, 0];
     this.tour = this.ouvreur;
     this.dernier = -1;
@@ -77,9 +105,16 @@ export class Moteur {
 
   restantes(e) { return this.boules - this.jouees[e]; }
 
-  // Ajoute et lance la boule de l'équipe au tour. Le déplacement se fait par step().
+  // Ajoute et lance la boule de l'équipe au tour (ou le cochonnet en début de mène).
+  // Le déplacement se fait par step().
   preparer(angle, puissance) {
     const e = this.tour;
+    if (this.phase === 'cochonnet') {
+      this.dernier = e;
+      const b = bruit(this.graine, this.lancers++);
+      lancer(this.etat, 0, angle + b.angle, puissanceCochonnet(puissance, this.sol) * (1 + b.puissance));
+      return 0;
+    }
     const i = ajouterBoule(this.etat, e);
     this.jouees[e]++;
     this.dernier = e;
@@ -95,6 +130,11 @@ export class Moteur {
       this.essai++;
       this.nouvelleMene();
       return { type: 'annulee' };
+    }
+    if (this.phase === 'cochonnet') {
+      // Cochonnet en place : la même équipe lance la première boule.
+      this.phase = 'boules';
+      return { type: 'tour', equipe: this.tour, cochonnet: true };
     }
     if (this.jouees[0] === this.boules && this.jouees[1] === this.boules) {
       const { gagnant, points } = compterMene(this.etat);
@@ -135,8 +175,8 @@ export class Moteur {
 }
 
 // Reconstruit l'état complet depuis le journal de coups (anti-triche et resynchro).
-export function rejouer(graine, coups, boules = BOULES_DEFAUT) {
-  const m = new Moteur(graine, boules);
+export function rejouer(graine, coups, boules = BOULES_DEFAUT, sol = SOL_DEFAUT) {
+  const m = new Moteur(graine, boules, sol);
   for (const c of coups) {
     if (m.fini) break;
     m.jouerInstantane(c.angle, c.puissance);
@@ -150,16 +190,17 @@ const attendreFrame = () => new Promise((ok) => requestAnimationFrame(ok));
 export class Partie {
   // equipeAuteur(uid) → 0 / 1 / -1 : en duel, un coup distant n'est accepté que si son
   // auteur (garanti par RLS dans le journal) est bien l'équipe dont c'est le tour.
-  constructor({ graine, cote = 0, reseau = null, equipeAuteur = null, boules = BOULES_DEFAUT, local = false, avantLancer, onTour, onCoup, onFin, onManche, onAnnulee }) {
+  constructor({ graine, cote = 0, reseau = null, equipeAuteur = null, boules = BOULES_DEFAUT, sol = SOL_DEFAUT, local = false, avantLancer, onTour, onCoup, onFin, onManche, onAnnulee }) {
     this.graine = graine;
     this.boules = boules;
+    this.sol = sol;
     this.equipeAuteur = equipeAuteur;
     this.cote = cote;
     this.reseau = reseau;
     this.local = local;      // deux joueurs sur le même appareil : chacun joue quand c'est son tour
     this.bloque = false;     // vrai pendant l'écran « passez le téléphone »
     this.cb = { avantLancer, onTour, onCoup, onFin, onManche, onAnnulee };
-    this.moteur = new Moteur(graine, boules);
+    this.moteur = new Moteur(graine, boules, sol);
     this.journal = [];
     this.enVol = false;
     this.file = Promise.resolve();
@@ -253,7 +294,7 @@ export class Partie {
       await pause(1600);
     } else {
       // Le score affiché vient du journal rejoué, pas de l'état mémoire.
-      const verif = rejouer(this.graine, this.journal, this.boules);
+      const verif = rejouer(this.graine, this.journal, this.boules, this.sol);
       ev.scores = verif.scores.slice();
       this.moteur.scores = verif.scores.slice();
       this.cb.onManche?.(ev);
@@ -271,7 +312,7 @@ export class Partie {
     if (this.enVol) return false;
     const tries = coups.slice().sort((a, b) => a.seq - b.seq);
     const valides = [];
-    const m = new Moteur(this.graine, this.boules);
+    const m = new Moteur(this.graine, this.boules, this.sol);
     for (const c of tries) {
       if (c.seq !== valides.length || m.fini) break;
       if (this.equipeAuteur && this.equipeAuteur(c.auteur) !== m.tour) break;
