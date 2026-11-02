@@ -37,6 +37,20 @@ export async function connexion() {
   return res.user.id;
 }
 
+// Profils (supabase/profils.sql) : chaque appel passe par une fonction serveur, jamais par une table.
+async function appel(nom, args) {
+  await connexion();
+  const c = await sb();
+  return verifier(await c.rpc(nom, args));
+}
+export const pseudoStatut = (pseudo) => appel('bal_pseudo_statut', { p_pseudo: pseudo });
+export const reserverPseudo = (pseudo, mdp, avatar) => appel('bal_reserver', { p_pseudo: pseudo, p_mdp: mdp, p_avatar: avatar ?? null });
+export const connecterPseudo = (pseudo, mdp) => appel('bal_connecter', { p_pseudo: pseudo, p_mdp: mdp });
+export const deconnecterPseudo = () => appel('bal_deconnecter', {});
+export const monProfil = () => appel('bal_mon_profil', {});
+export const changerAvatar = (avatar) => appel('bal_changer_avatar', { p_avatar: avatar });
+export const profilDe = (uid) => appel('bal_profil_de', { p_uid: uid });
+
 const unique = (d) => (Array.isArray(d) ? d[0] : d);
 
 export async function creerSalon() {

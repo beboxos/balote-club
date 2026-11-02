@@ -49,6 +49,8 @@
           </button>
         </div>
 
+        <p class="message message--pseudo" id="pseudo-msg" role="status"></p>
+
         <div class="actions">
           <div class="segment" role="radiogroup" aria-label="Niveau du bot">
             <button type="button" role="radio" aria-checked="false" data-niveau="0">Facile</button>
@@ -176,9 +178,35 @@
     </div>
   </main>
 
-  <dialog id="dialogue-avatar" class="dialogue" aria-labelledby="titre-avatar">
-    <h2 id="titre-avatar" class="titre titre--s">Choisir un portrait</h2>
-    <div class="grille-avatars" id="grille-avatars"></div>
+  <dialog id="dialogue-avatar" class="dialogue dialogue--profil" aria-labelledby="titre-avatar">
+    <h2 id="titre-avatar" class="titre titre--s">Mon profil</h2>
+    <div class="reglage">
+      <p class="reglage-nom">Portrait</p>
+      <div class="grille-avatars" id="grille-avatars"></div>
+      <button type="button" class="btn" id="btn-photo">Utiliser ma photo</button>
+      <input type="file" id="fichier-photo" accept="image/*" hidden>
+    </div>
+    <div class="reglage">
+      <p class="reglage-nom">Pseudo réservé</p>
+      <p class="reglage-aide" id="compte-etat">Sans réservation, votre pseudo est libre tant que personne ne l'a réservé.</p>
+      <form id="form-reserver" class="form-compte" autocomplete="off">
+        <label class="sr" for="mdp-reserver">Mot de passe</label>
+        <input id="mdp-reserver" type="password" minlength="4" maxlength="64" autocomplete="new-password" placeholder="Mot de passe (4 caractères minimum)" required>
+        <button type="submit" class="btn btn--plein" id="btn-reserver">Réserver mon pseudo</button>
+      </form>
+      <details class="deja" id="bloc-connexion">
+        <summary>J'ai déjà un pseudo réservé</summary>
+        <form id="form-connexion" class="form-compte" autocomplete="off">
+          <label class="sr" for="connexion-pseudo">Pseudo</label>
+          <input id="connexion-pseudo" type="text" maxlength="14" autocomplete="username" placeholder="Pseudo" required>
+          <label class="sr" for="connexion-mdp">Mot de passe</label>
+          <input id="connexion-mdp" type="password" maxlength="64" autocomplete="current-password" placeholder="Mot de passe" required>
+          <button type="submit" class="btn">Me connecter</button>
+        </form>
+      </details>
+      <button type="button" class="btn" id="btn-deconnexion" hidden>Se déconnecter de ce pseudo</button>
+      <p class="message" id="compte-message" role="status"></p>
+    </div>
     <button type="button" class="btn btn--fantome" id="btn-fermer-avatar">Fermer</button>
   </dialog>
 

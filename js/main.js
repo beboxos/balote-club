@@ -1,4 +1,5 @@
 import { AVATARS, STOCKAGE } from './config.js';
+import { pseudoValide, avatarValide, MDP_MIN } from './core/profil.js';
 import { Partie, BOULES_DEFAUT, BOULES_CHOIX, BUT, BUTS_CHOIX } from './core/partie.js';
 import { SOLS, SOL_DEFAUT, LONGUEURS, LONGUEUR_DEFAUT, CAILLOUX_DEFAUT } from './core/physique.js';
 import { jouerBot, NIVEAUX } from './core/bot.js';
@@ -10,6 +11,7 @@ import * as ui from './ui/ecrans.js';
 import { charger, poserAmbiance } from './assets/chargeur.js';
 import {
   enLigneDisponible, connexion, creerSalon, rejoindre, chargerPartie, chargerCoups, Reseau,
+  pseudoStatut, reserverPseudo, connecterPseudo, deconnecterPseudo, monProfil, changerAvatar, profilDe,
 } from './net/reseau.js';
 import { Reconnexion } from './net/reconnexion.js';
 
@@ -20,7 +22,7 @@ function ecrire(cle, v) { try { localStorage.setItem(cle, v); } catch { /* stock
 
 const prefs = {
   pseudo: lire(STOCKAGE.pseudo, ''),
-  avatar: AVATARS.includes(lire(STOCKAGE.avatar, '01')) ? lire(STOCKAGE.avatar, '01') : '01',
+  avatar: avatarValide(lire(STOCKAGE.avatar, '01')) ? lire(STOCKAGE.avatar, '01') : '01',
   niveau: Math.min(2, Math.max(0, Number(lire(STOCKAGE.niveau, '1')) || 0)),
   boules: BOULES_CHOIX.includes(Number(lire(STOCKAGE.boules, ''))) ? Number(lire(STOCKAGE.boules, '')) : BOULES_DEFAUT,
   but: BUTS_CHOIX.includes(Number(lire(STOCKAGE.but, ''))) ? Number(lire(STOCKAGE.but, '')) : BUT,
@@ -60,6 +62,103 @@ const rendu = new Rendu($('terrain'), {
 });
 
 function nomJoueur() { return prefs.pseudo.trim() || 'Vous'; }
+
+// ---------- Profil : pseudo réservé et portrait ----------
+
+let compte = null;                  // { pseudo, avatar } du profil réservé lié à cet appareil, sinon null
+const boutonsAvatars = new Map();   // id de portrait → bouton de la grille
+
+const ERREURS_COMPTE = {
+  pris: "Ce pseudo vient d'être pris. Choisissez-en un autre.",
+  invalide: 'Pseudo de 3 à 14 caractères : lettres, chiffres, espace, _ . -',
+  mdp: 'Mot de passe : 4 caractères minimum.',
+  limite: 'Trop de pseudos réservés depuis cet appareil.',
+  avatar: 'Portrait refusé, choisissez-en un autre.',
+  inconnu: 'Aucun pseudo réservé de ce nom.',
+  bloque: "Trop d'essais : réessayez dans 15 minutes.",
+};
+
+function sauverAvatar() { ecrire(STOCKAGE.avatar, prefs.avatar); }
+
+function majAvatars() {
+  $('avatar-moi').src = ui.avatarSrc(prefs.avatar);
+  for (const [id, b] of boutonsAvatars) b.setAttribute('aria-pressed', String(id === prefs.avatar));
+  $('btn-photo').setAttribute('aria-pressed', String(prefs.avatar.startsWith('data:')));
+}
+
+function majCompteUI() {
+  const champ = $('pseudo');
+  champ.readOnly = !!compte;
+  if (compte) champ.value = compte.pseudo;
+  $('form-reserver').hidden = !!compte;
+  $('bloc-connexion').hidden = !!compte;
+  $('btn-deconnexion').hidden = !compte;
+  $('btn-reserver').textContent = pseudoValide(prefs.pseudo) ? `Réserver « ${prefs.pseudo.trim()} »` : 'Réserver mon pseudo';
+  $('compte-etat').textContent = compte
+    ? `« ${compte.pseudo} » est réservé et protégé par votre mot de passe. Il vous suit sur vos autres appareils.`
+    : "Sans réservation, votre pseudo reste libre tant que personne ne l'a réservé.";
+}
+
+function appliquerCompte(p) {
+  compte = p ? { pseudo: p.pseudo, avatar: p.avatar } : null;
+  if (compte) {
+    prefs.pseudo = compte.pseudo;
+    ecrire(STOCKAGE.pseudo, prefs.pseudo);
+    if (avatarValide(compte.avatar)) { prefs.avatar = compte.avatar; sauverAvatar(); }
+  }
+  majAvatars();
+  majCompteUI();
+}
+
+// Profil réservé lié à cet appareil (réseau) : sans réseau, on garde l'état local.
+async function rafraichirCompte() {
+  if (!enLigneDisponible()) return;
+  try { appliquerCompte(await monProfil()); } catch { /* hors ligne */ }
+}
+
+function choisirAvatar(a) {
+  prefs.avatar = a;
+  sauverAvatar();
+  majAvatars();
+  if (compte) changerAvatar(a).catch(() => { /* resynchronisé à la prochaine connexion */ });
+}
+
+// Photo → carré 128 px recadré au centre, encodé en WebP (ou JPEG) sous 18 000 caractères.
+async function photoVersAvatar(fichier) {
+  const bmp = await createImageBitmap(fichier);
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 128;
+  const t = Math.min(bmp.width, bmp.height);
+  c.getContext('2d').drawImage(bmp, (bmp.width - t) / 2, (bmp.height - t) / 2, t, t, 0, 0, 128, 128);
+  bmp.close?.();
+  for (const [type, q] of [['image/webp', 0.8], ['image/jpeg', 0.8], ['image/jpeg', 0.6], ['image/jpeg', 0.4]]) {
+    const u = c.toDataURL(type, q);
+    if (u.startsWith(`data:${type}`) && u.length <= 18000) return u;
+  }
+  return null;
+}
+
+// Adversaire d'un duel : le profil réservé lié à son appareil fait foi (pseudo et portrait du serveur) ;
+// sans profil, son pseudo libre est affiché sauf s'il est réservé par quelqu'un d'autre.
+async function verifierAdversaire(s) {
+  if (!enLigneDisponible() || !s.ligne) return;
+  try {
+    const cote = 1 - s.cote;
+    const l = await chargerPartie(s.ligne.code);
+    const uidAdv = cote === 1 ? l?.invite : l?.hote;
+    if (!uidAdv || session !== s) return;
+    const pf = await profilDe(uidAdv);
+    if (pf) {
+      s.verifie[cote] = true;
+      s.noms[cote] = String(pf.pseudo).slice(0, 14);
+      if (avatarValide(pf.avatar)) s.avatars[cote] = pf.avatar;
+    } else if (s.noms[cote] !== 'Adversaire' && (await pseudoStatut(s.noms[cote])) === 'reserve') {
+      s.noms[cote] = 'Adversaire';
+    }
+    ui.joueurs(s.noms, s.avatars);
+  } catch { /* on garde ce que l'adversaire annonce */ }
+}
 
 // ---------- Partie : liaison règles ↔ interface ----------
 
@@ -226,10 +325,11 @@ function majUrl(code) {
 function profil(cote) { return { pseudo: nomJoueur(), avatar: prefs.avatar, cote }; }
 
 function appliquerProfil(s, p) {
-  if (!p || (p.cote !== 0 && p.cote !== 1) || p.cote === s.cote) return;
+  if (!p || (p.cote !== 0 && p.cote !== 1) || p.cote === s.cote || s.verifie?.[p.cote]) return;
   s.noms[p.cote] = String(p.pseudo || 'Adversaire').slice(0, 14);
-  s.avatars[p.cote] = AVATARS.includes(p.avatar) ? p.avatar : '01';
+  s.avatars[p.cote] = avatarValide(p.avatar) ? p.avatar : '01';
   ui.joueurs(s.noms, s.avatars);
+  verifierAdversaire(s);
 }
 
 async function ouvrirDuel(ligne, uid) {
@@ -238,6 +338,7 @@ async function ouvrirDuel(ligne, uid) {
     solo: false,
     ligne,
     cote,
+    verifie: [false, false],
     noms: cote === 0 ? [nomJoueur(), 'Adversaire'] : ['Adversaire', nomJoueur()],
     avatars: cote === 0 ? [prefs.avatar, '01'] : ['01', prefs.avatar],
   };
@@ -302,6 +403,7 @@ async function creerDuel() {
   ui.afficher('salon');
   try {
     const uid = await connexion();
+    await rafraichirCompte();
     const ligne = await creerSalon();
     const s = await ouvrirDuel(ligne, uid);
     ui.joueurs(s.noms, s.avatars);
@@ -324,6 +426,7 @@ async function rejoindreDuel(code) {
   err.textContent = '';
   try {
     const uid = await connexion();
+    await rafraichirCompte();
     const ligne = await rejoindre(code);
     fermerSession();
     const s = await ouvrirDuel(ligne, uid);
@@ -379,31 +482,117 @@ function messageErreur(e) {
 function brancherInterface() {
   const pseudo = $('pseudo');
   pseudo.value = prefs.pseudo;
-  pseudo.addEventListener('change', () => {
-    prefs.pseudo = pseudo.value.trim().slice(0, 14);
+  const dire = (id, texte, erreur = false) => {
+    const el = $(id);
+    el.textContent = texte;
+    el.classList.toggle('message--erreur', erreur);
+  };
+  pseudo.addEventListener('change', async () => {
+    if (compte) { pseudo.value = compte.pseudo; return; }
+    const v = pseudo.value.trim().slice(0, 14);
+    dire('pseudo-msg', '');
+    if (v && !pseudoValide(v)) {
+      dire('pseudo-msg', ERREURS_COMPTE.invalide, true);
+      pseudo.value = prefs.pseudo;
+      return;
+    }
+    if (v && enLigneDisponible()) {
+      try {
+        const st = await pseudoStatut(v);
+        if (st === 'reserve') {
+          dire('pseudo-msg', `« ${v} » est réservé : connectez-vous depuis votre portrait, ou choisissez-en un autre.`, true);
+          pseudo.value = prefs.pseudo;
+          return;
+        }
+        if (st === 'a_moi') await rafraichirCompte();
+      } catch { /* hors ligne : pseudo libre */ }
+    }
+    if (compte) return;
+    prefs.pseudo = v;
     ecrire(STOCKAGE.pseudo, prefs.pseudo);
+    majCompteUI();
   });
 
-  $('avatar-moi').src = ui.avatarSrc(prefs.avatar);
   const grille = $('grille-avatars');
   for (const a of AVATARS) {
     const b = document.createElement('button');
     b.type = 'button';
     b.setAttribute('aria-label', `Portrait ${Number(a)}`);
-    b.setAttribute('aria-pressed', String(a === prefs.avatar));
     b.innerHTML = `<img src="${ui.avatarSrc(a)}" width="96" height="96" alt="">`;
-    b.addEventListener('click', () => {
-      prefs.avatar = a;
-      ecrire(STOCKAGE.avatar, a);
-      $('avatar-moi').src = ui.avatarSrc(a);
-      for (const x of grille.children) x.setAttribute('aria-pressed', String(x === b));
-      audio.jouer('ui-valide', { volume: 0.5 });
-      $('dialogue-avatar').close();
-    });
+    b.addEventListener('click', () => { choisirAvatar(a); audio.jouer('ui-valide', { volume: 0.5 }); });
+    boutonsAvatars.set(a, b);
     grille.appendChild(b);
   }
-  $('btn-avatar').addEventListener('click', () => $('dialogue-avatar').showModal());
+  majAvatars();
+  majCompteUI();
+  $('btn-avatar').addEventListener('click', () => {
+    $('dialogue-avatar').showModal();
+    dire('compte-message', '');
+    majCompteUI();
+    rafraichirCompte();
+  });
   $('btn-fermer-avatar').addEventListener('click', () => $('dialogue-avatar').close());
+
+  $('btn-photo').addEventListener('click', () => $('fichier-photo').click());
+  $('fichier-photo').addEventListener('change', async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      const u = await photoVersAvatar(f);
+      if (!u) throw new Error('trop lourde');
+      choisirAvatar(u);
+      dire('compte-message', 'Photo enregistrée.');
+    } catch {
+      dire('compte-message', 'Cette image ne peut pas être utilisée. Essayez une autre photo.', true);
+    }
+  });
+
+  $('form-reserver').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!pseudoValide(prefs.pseudo)) {
+      dire('compte-message', "Entrez d'abord votre pseudo dans le menu (3 à 14 caractères).", true);
+      return;
+    }
+    const mdp = $('mdp-reserver').value;
+    if (mdp.length < MDP_MIN) { dire('compte-message', ERREURS_COMPTE.mdp, true); return; }
+    if (!enLigneDisponible()) { dire('compte-message', 'Réservation indisponible hors ligne.', true); return; }
+    dire('compte-message', 'Réservation…');
+    try {
+      const r = await reserverPseudo(prefs.pseudo.trim(), mdp, prefs.avatar);
+      if (!r.ok) { dire('compte-message', ERREURS_COMPTE[r.error] || 'Réservation impossible.', true); return; }
+      $('mdp-reserver').value = '';
+      appliquerCompte(r);
+      dire('compte-message', 'Pseudo réservé. Gardez bien votre mot de passe : il ne peut pas être récupéré.');
+    } catch {
+      dire('compte-message', 'Réseau indisponible. Réessayez.', true);
+    }
+  });
+
+  $('form-connexion').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!enLigneDisponible()) { dire('compte-message', 'Connexion indisponible hors ligne.', true); return; }
+    dire('compte-message', 'Connexion…');
+    try {
+      const r = await connecterPseudo($('connexion-pseudo').value.trim(), $('connexion-mdp').value);
+      if (!r.ok) { dire('compte-message', ERREURS_COMPTE[r.error] || 'Connexion impossible.', true); return; }
+      $('connexion-mdp').value = '';
+      appliquerCompte(r);
+      dire('compte-message', `Bienvenue, ${r.pseudo}.`);
+    } catch {
+      dire('compte-message', 'Réseau indisponible. Réessayez.', true);
+    }
+  });
+
+  $('btn-deconnexion').addEventListener('click', async () => {
+    try {
+      await deconnecterPseudo();
+      appliquerCompte(null);
+      dire('compte-message', 'Déconnecté : le pseudo reste réservé, vous le retrouverez avec votre mot de passe.');
+    } catch {
+      dire('compte-message', 'Réseau indisponible. Réessayez.', true);
+    }
+  });
 
   const son = $('btn-son');
   const majSon = () => {

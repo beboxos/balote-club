@@ -23,7 +23,7 @@ export function afficher(nom) {
 
 export function ecranCourant() { return courant; }
 
-export function avatarSrc(id) { return `assets/avatars/${id}.webp`; }
+export { avatarSrc } from '../core/profil.js';
 
 export function joueurs(noms, avatars) {
   for (const i of [0, 1]) {
