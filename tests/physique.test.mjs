@@ -137,6 +137,21 @@ for (const l of Object.values(LONGUEURS)) {
   assert.ok(dj > JACK_DIST_MIN * l.k - 40 && dj < JACK_DIST_MAX * l.k + 40, `cochonnet ${l.id} : ${dj}`);
   assert.ok(m.etat.objets[0].vivant, `cochonnet sur le terrain (${l.id})`);
 }
+// Sur un terrain plus long, la portée totale augmente de k (le roulage compense le vol borné).
+for (const sol of Object.values(SOLS)) {
+  fixerLongueur('normal');
+  const base = portee(sol);
+  for (const l of [LONGUEURS.long, LONGUEURS.tresLong]) {
+    fixerLongueur(l.id);
+    assert.ok(Math.abs(portee(sol) - base * l.k) < 1e-6, `portée ${sol.id} ${l.id}`);
+    const ec = creerEtat({ x: 30, y: 30 }, sol);
+    const bc = ajouterBoule(ec, 0);
+    lancer(ec, bc, 27000, 0.5);
+    while (!step(ec));
+    assert.ok(Math.abs(LANCER.y - ec.objets[bc].y - portee(sol) * 0.5) < 3, `roulage réel ${sol.id} ${l.id}`);
+  }
+}
+fixerLongueur('normal');
 assert.equal(new Moteur(5, 3, 'terre', 5, { cailloux: 0 }).etat.cailloux.length, 0);
 fixerLongueur('normal');
 assert.equal(TERRAIN.h, 640);

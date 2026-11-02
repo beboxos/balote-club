@@ -32,18 +32,29 @@ export function nombreCailloux(pourcent) {
   return Math.round((Math.min(100, Math.max(0, pourcent)) * CAILLOUX_MAX) / 100);
 }
 
-// Longueur du terrain : h = hauteur du terrain, k = échelle de la distance du cochonnet.
-// Le cercle de lancer reste à 74 unités du bord, le fond s'éloigne ou se rapproche.
+// Longueur du terrain : h = hauteur du terrain, k = échelle de la distance du cochonnet et de la
+// portée totale. Le vol d'une boule est borné (PORTEE_AIR) : sur un terrain plus long, c'est le
+// roulage qui s'allonge (frottementEffectif). 640 est le minimum.
+// Le cercle de lancer reste à 74 unités du bord, le fond s'éloigne.
 export const LONGUEURS = {
-  court: { id: 'court', nom: 'Court', h: 540, k: 0.7 },
   normal: { id: 'normal', nom: 'Normal', h: 640, k: 1 },
   long: { id: 'long', nom: 'Long', h: 780, k: 1.3 },
+  tresLong: { id: 'tresLong', nom: 'Très long', h: 920, k: 1.6 },
 };
 export const LONGUEUR_DEFAUT = 'normal';
 
+// Frottement réellement appliqué : celui du sol à la longueur normale ; plus faible sur un terrain
+// plus long, de sorte que la portée totale soit k fois celle de la longueur normale.
+export function frottementEffectif(sol) {
+  if (TERRAIN.k === 1) return sol.frottement;
+  const roulage = (V_LANCER * V_LANCER * sol.impact * sol.impact) / (2 * sol.frottement);
+  const cible = TERRAIN.k * (V_LANCER * T_VOL + roulage) - V_LANCER * T_VOL;
+  return (V_LANCER * V_LANCER * sol.impact * sol.impact) / (2 * cible);
+}
+
 // Portée totale (vol + roulement) à puissance 1 sur un sol donné.
 export function portee(sol) {
-  return V_LANCER * T_VOL + (V_LANCER * V_LANCER * sol.impact * sol.impact) / (2 * sol.frottement);
+  return V_LANCER * T_VOL + (V_LANCER * V_LANCER * sol.impact * sol.impact) / (2 * frottementEffectif(sol));
 }
 
 // Le cochonnet se lance dans une fourchette de distance : ni trop près, ni trop loin.
@@ -192,7 +203,7 @@ function cailloux(etat, o) {
 }
 
 function integrer(etat) {
-  const dec = etat.sol.frottement * PAS;
+  const dec = frottementEffectif(etat.sol) * PAS;
   const impact = etat.sol.impact;
   const objets = etat.objets;
   for (let i = 0; i < objets.length; i++) {

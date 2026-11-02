@@ -4,8 +4,14 @@ import { TERRAIN, LANCER, RAYON } from '../core/physique.js';
 import { mulberry32 } from '../core/rng.js';
 
 const HAUTEUR = 600;                 // hauteur de la caméra au-dessus du sol
-const TANGAGE = (50 * Math.PI) / 180;
-const LACET = (35 * Math.PI) / 180;  // rotation de la vue autour de la verticale
+// Vue iso de base (terrain normal) : tangage 50°, rotation 35° autour de la verticale. Plus le
+// terrain est long, plus la vue se redresse (tangage ↑) et s'aligne sur l'axe du terrain (rotation ↓),
+// pour que le terrain entier garde la même taille à l'écran. Réglé à 18° / 59° pour 920 unités.
+const rad = (d) => (d * Math.PI) / 180;
+function angles(h) {
+  const t = Math.min(1, Math.max(0, (h - 640) / 280));
+  return { tangage: rad(50 + 9 * t), lacet: rad(35 - 17 * t) };
+}
 const DISTANCE = 336;                // recul de la caméra par rapport au pivot
 
 // Les boules et le cochonnet sont dessinés un peu plus gros que leur rayon physique,
@@ -16,10 +22,11 @@ export class Camera {
   constructor(l, h) {
     this.l = l;
     this.h = h;
-    this.s = Math.sin(TANGAGE);
-    this.c = Math.cos(TANGAGE);
-    this.cl = Math.cos(LACET);
-    this.sl = Math.sin(LACET);
+    const { tangage, lacet } = angles(TERRAIN.h);
+    this.s = Math.sin(tangage);
+    this.c = Math.cos(tangage);
+    this.cl = Math.cos(lacet);
+    this.sl = Math.sin(lacet);
     // Position de la caméra dans le terrain, pour savoir quelles faces sont visibles.
     // Pivot au milieu du terrain (330 pour la longueur normale), donc fonction de la longueur choisie.
     this.pivot = { x: TERRAIN.l / 2, y: TERRAIN.h / 2 + 10 };
