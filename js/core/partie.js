@@ -1,6 +1,7 @@
 import {
   creerEtat, ajouterBoule, lancer, step, distance,
-  normaliserAngle, normaliserPuissance, puissanceCochonnet, PAS, LANCER, SOLS, SOL_DEFAUT,
+  normaliserAngle, normaliserPuissance, puissanceCochonnet, PAS, LANCER, TERRAIN, SOLS, SOL_DEFAUT,
+  CAILLOUX_DEFAUT, LONGUEUR_DEFAUT, nombreCailloux, fixerLongueur,
 } from './physique.js';
 import { deriver, mulberry32 } from './rng.js';
 
@@ -39,7 +40,7 @@ export function semerCailloux(graine, mene, essai, nombre) {
   for (let k = 0; k < nombre; k++) {
     liste.push({
       x: 65 + Math.floor(rng() * 230),
-      y: 95 + Math.floor(rng() * 380),
+      y: 95 + Math.floor(rng() * (TERRAIN.h - 260)),
       r: 3 + Math.floor(rng() * 3),
       d: (14 + Math.floor(rng() * 19)) / 100,
     });
@@ -77,9 +78,12 @@ export function compterMene(etat) {
 
 // Moteur de règles pur : aucune notion de temps ni de réseau.
 export class Moteur {
-  constructor(graine, boules = BOULES_DEFAUT, sol = SOL_DEFAUT, but = BUT) {
+  // terrain : réglages qui ne changent pas les règles mais le jeu { cailloux (%), longueur }.
+  constructor(graine, boules = BOULES_DEFAUT, sol = SOL_DEFAUT, but = BUT, terrain = {}) {
     this.graine = graine;
     this.but = but;
+    this.cailloux = terrain.cailloux ?? CAILLOUX_DEFAUT;
+    this.longueur = fixerLongueur(terrain.longueur ?? LONGUEUR_DEFAUT).id;
     this.boules = boules;
     this.sol = SOLS[sol] || SOLS[SOL_DEFAUT];
     this.lancers = 0;
@@ -92,7 +96,7 @@ export class Moteur {
   }
 
   nouvelleMene() {
-    const cailloux = semerCailloux(this.graine, this.mene, this.essai, this.sol.cailloux);
+    const cailloux = semerCailloux(this.graine, this.mene, this.essai, nombreCailloux(this.cailloux));
     if (this.essai >= ESSAIS_COCHONNET) {
       this.etat = creerEtat(positionJack(this.graine, this.mene, this.essai), this.sol, cailloux);
       this.phase = 'boules';
@@ -178,8 +182,8 @@ export class Moteur {
 }
 
 // Reconstruit l'état complet depuis le journal de coups (anti-triche et resynchro).
-export function rejouer(graine, coups, boules = BOULES_DEFAUT, sol = SOL_DEFAUT, but = BUT) {
-  const m = new Moteur(graine, boules, sol, but);
+export function rejouer(graine, coups, boules = BOULES_DEFAUT, sol = SOL_DEFAUT, but = BUT, terrain = {}) {
+  const m = new Moteur(graine, boules, sol, but, terrain);
   for (const c of coups) {
     if (m.fini) break;
     m.jouerInstantane(c.angle, c.puissance);
@@ -193,18 +197,19 @@ const attendreFrame = () => new Promise((ok) => requestAnimationFrame(ok));
 export class Partie {
   // equipeAuteur(uid) → 0 / 1 / -1 : en duel, un coup distant n'est accepté que si son
   // auteur (garanti par RLS dans le journal) est bien l'équipe dont c'est le tour.
-  constructor({ graine, cote = 0, reseau = null, equipeAuteur = null, boules = BOULES_DEFAUT, sol = SOL_DEFAUT, but = BUT, local = false, avantLancer, onTour, onCoup, onFin, onManche, onAnnulee }) {
+  constructor({ graine, cote = 0, reseau = null, equipeAuteur = null, boules = BOULES_DEFAUT, sol = SOL_DEFAUT, but = BUT, cailloux = CAILLOUX_DEFAUT, longueur = LONGUEUR_DEFAUT, local = false, avantLancer, onTour, onCoup, onFin, onManche, onAnnulee }) {
     this.graine = graine;
     this.boules = boules;
     this.sol = sol;
     this.but = but;
+    this.terrain = { cailloux, longueur };
     this.equipeAuteur = equipeAuteur;
     this.cote = cote;
     this.reseau = reseau;
     this.local = local;      // deux joueurs sur le même appareil : chacun joue quand c'est son tour
     this.bloque = false;     // vrai pendant l'écran « passez le téléphone »
     this.cb = { avantLancer, onTour, onCoup, onFin, onManche, onAnnulee };
-    this.moteur = new Moteur(graine, boules, sol, but);
+    this.moteur = new Moteur(graine, boules, sol, but, this.terrain);
     this.journal = [];
     this.enVol = false;
     this.file = Promise.resolve();
@@ -298,7 +303,7 @@ export class Partie {
       await pause(1600);
     } else {
       // Le score affiché vient du journal rejoué, pas de l'état mémoire.
-      const verif = rejouer(this.graine, this.journal, this.boules, this.sol, this.but);
+      const verif = rejouer(this.graine, this.journal, this.boules, this.sol, this.but, this.terrain);
       ev.scores = verif.scores.slice();
       this.moteur.scores = verif.scores.slice();
       this.cb.onManche?.(ev);
@@ -316,7 +321,7 @@ export class Partie {
     if (this.enVol) return false;
     const tries = coups.slice().sort((a, b) => a.seq - b.seq);
     const valides = [];
-    const m = new Moteur(this.graine, this.boules, this.sol, this.but);
+    const m = new Moteur(this.graine, this.boules, this.sol, this.but, this.terrain);
     for (const c of tries) {
       if (c.seq !== valides.length || m.fini) break;
       if (this.equipeAuteur && this.equipeAuteur(c.auteur) !== m.tour) break;

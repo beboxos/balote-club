@@ -73,4 +73,4 @@ export function positionRepos(equipe) {
   return { x: LANCER.x + (equipe === 0 ? -84 : 84), y: LANCER.y + 26 };
 }
 
-export const POSTE = { x: LANCER.x, y: LANCER.y + 8 };
+export function poste() { return { x: LANCER.x, y: LANCER.y + 8 }; }

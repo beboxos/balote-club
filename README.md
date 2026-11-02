@@ -1,7 +1,7 @@
 # Balote Club
 
 Pétanque tour par tour, mobile d'abord, vue 3D isométrique, lancer en cloche : solo contre le club
-(3 niveaux, 3 ou 6 boules, 3 terrains : lisse, terre, gravier) ou duel à distance (3 boules), ou à deux sur le même téléphone. Site 100 % statique (HTML, CSS, modules ES natifs), hébergé sur GitHub Pages ;
+(3 niveaux, 3 ou 6 boules, réglages de terrain : roulage lisse/terre/gravier, cailloux, longueur) ou duel à distance (3 boules), ou à deux sur le même téléphone. Site 100 % statique (HTML, CSS, modules ES natifs), hébergé sur GitHub Pages ;
 le duel passe par Supabase (auth anonyme, Postgres, Realtime).
 
 ## Lancer en local

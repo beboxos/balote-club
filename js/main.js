@@ -1,6 +1,6 @@
 import { AVATARS, STOCKAGE } from './config.js';
 import { Partie, BOULES_DEFAUT, BOULES_CHOIX, BUT, BUTS_CHOIX } from './core/partie.js';
-import { SOLS, SOL_DEFAUT } from './core/physique.js';
+import { SOLS, SOL_DEFAUT, LONGUEURS, LONGUEUR_DEFAUT, CAILLOUX_DEFAUT } from './core/physique.js';
 import { jouerBot, NIVEAUX } from './core/bot.js';
 import { mulberry32 } from './core/rng.js';
 import { Rendu } from './ui/rendu.js';
@@ -25,17 +25,29 @@ const prefs = {
   but: BUTS_CHOIX.includes(Number(lire(STOCKAGE.but, ''))) ? Number(lire(STOCKAGE.but, '')) : BUT,
   sol: SOLS[lire(STOCKAGE.sol, '')] ? lire(STOCKAGE.sol, '') : SOL_DEFAUT,
 };
+prefs.cailloux = Math.min(100, Math.max(0, Math.round(Number(lire(STOCKAGE.cailloux, CAILLOUX_DEFAUT)) / 10) * 10));
+if (Number.isNaN(prefs.cailloux)) prefs.cailloux = CAILLOUX_DEFAUT;
+prefs.longueur = LONGUEURS[lire(STOCKAGE.longueur, '')] ? lire(STOCKAGE.longueur, '') : LONGUEUR_DEFAUT;
 const IDS_SOLS = Object.keys(SOLS);
+const IDS_LONGUEURS = Object.keys(LONGUEURS);
 
 // Session courante : solo ou duel.
 let session = null;
 
 const rendu = new Rendu($('terrain'), {
   onTir: (angle, puissance) => session?.partie.jouer(angle, puissance),
-  onChoc: (ch) => audio.jouer(ch.jack ? 'impact-jack' : 'impact-boule', {
-    volume: Math.min(1, ch.force / 500 + 0.15),
-    vitesse: 0.92 + Math.random() * 0.16,
-  }),
+  onChoc: (ch) => {
+    const sol = session?.partie.moteur.sol.id;
+    if (ch.atterri) audio.atterrir(ch.force, sol, ch.jack);
+    else if (ch.caillou) audio.jouer('impact-jack', { volume: 0.3, vitesse: 1.7 + Math.random() * 0.3 });
+    else {
+      audio.jouer(ch.jack ? 'impact-jack' : 'impact-boule', {
+        volume: Math.min(1, ch.force / 300 + 0.3),
+        vitesse: 0.92 + Math.random() * 0.16,
+      });
+    }
+  },
+  onRoule: (v) => audio.rouler(v, session?.partie.moteur.sol.id),
   onVisee: (p) => audio.jouer('jauge', { volume: 0.35, vitesse: 0.8 + p * 0.6 }),
   onChute: () => audio.jouer('chute', { volume: 0.7 }),
 });
@@ -71,7 +83,7 @@ function creerPartie(s, graine, cote, reseau) {
     ? (uid) => (uid === ligne.hote ? 0 : uid === ligne.invite ? 1 : -1)
     : null;
   const partie = new Partie({
-    graine, cote, reseau, equipeAuteur, boules: s.boules, sol: s.sol, but: s.but, local: !!s.local,
+    graine, cote, reseau, equipeAuteur, boules: s.boules, sol: s.sol, but: s.but, cailloux: s.cailloux, longueur: s.longueur, local: !!s.local,
     avantLancer: ({ equipe, coup }) => rendu.lancerGeste(equipe, coup.puissance),
     onCoup: () => {
       audio.jouer('lancer', { volume: 0.8 });
@@ -149,6 +161,8 @@ function demarrerSolo() {
     boules: prefs.boules,
     sol: prefs.sol,
     but: prefs.but,
+    cailloux: prefs.cailloux,
+    longueur: prefs.longueur,
     rng: mulberry32(graine ^ 0x5eed),
     noms: [nomJoueur(), 'Le club'],
     avatars: [prefs.avatar, avatarBot],
@@ -168,6 +182,8 @@ function demarrerLocal() {
     boules: prefs.boules,
     sol: prefs.sol,
     but: prefs.but,
+    cailloux: prefs.cailloux,
+    longueur: prefs.longueur,
     vu: 0,   // équipe qui tient le téléphone
     noms: [prefs.pseudo.trim() || 'Joueur 1', 'Joueur 2'],
     avatars: [prefs.avatar, prefs.avatar === '02' ? '03' : '02'],
@@ -456,6 +472,36 @@ function brancherInterface() {
     majSol();
     segS[IDS_SOLS.indexOf(prefs.sol)].focus();
   });
+
+  const segL = document.querySelectorAll('.segment [data-longueur]');
+  const majLongueur = () => segL.forEach((b) => b.setAttribute('aria-checked', String(b.dataset.longueur === prefs.longueur)));
+  majLongueur();
+  segL.forEach((b) => b.addEventListener('click', () => {
+    prefs.longueur = b.dataset.longueur;
+    ecrire(STOCKAGE.longueur, prefs.longueur);
+    majLongueur();
+  }));
+  document.querySelector('.segment--longueur').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const i = IDS_LONGUEURS.indexOf(prefs.longueur);
+    prefs.longueur = IDS_LONGUEURS[(i + (e.key === 'ArrowRight' ? 1 : IDS_LONGUEURS.length - 1)) % IDS_LONGUEURS.length];
+    ecrire(STOCKAGE.longueur, prefs.longueur);
+    majLongueur();
+    segL[IDS_LONGUEURS.indexOf(prefs.longueur)].focus();
+  });
+
+  const curseur = $('reglage-cailloux');
+  curseur.value = String(prefs.cailloux);
+  const majCailloux = () => { $('sortie-cailloux').textContent = `${prefs.cailloux} %`; };
+  majCailloux();
+  curseur.addEventListener('input', () => {
+    prefs.cailloux = Number(curseur.value);
+    ecrire(STOCKAGE.cailloux, String(prefs.cailloux));
+    majCailloux();
+  });
+
+  $('btn-reglages').addEventListener('click', () => $('dialogue-reglages').showModal());
+  $('btn-fermer-reglages').addEventListener('click', () => $('dialogue-reglages').close());
 
   $('btn-solo').addEventListener('click', demarrerSolo);
   $('btn-local').addEventListener('click', demarrerLocal);

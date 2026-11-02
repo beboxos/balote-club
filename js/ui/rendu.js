@@ -2,7 +2,7 @@ import { TERRAIN, LANCER, RAYON, PORTEE_AIR, sinCos, distance, puissanceCochonne
 import { meilleures } from '../core/partie.js';
 import { dessinerTerrain, spriteBoule, Effets, viderCaches } from './matieres.js';
 import { Camera, peindreDecor, ombreSol, anneauSol, cochonnet, trajectoire, jauge, GROSSISSEMENT } from './vue3d.js';
-import { dessinerPerso, positionRepos, POSTE } from './perso.js';
+import { dessinerPerso, positionRepos, poste } from './perso.js';
 
 const DRAG_MAX = 150;     // unités du terrain pour la puissance pleine
 const PUISSANCE_MIN = 0.04;
@@ -23,13 +23,14 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const adoucir = (t) => t * t * (3 - 2 * t);
 
 export class Rendu {
-  constructor(canvas, { onTir, onChoc, onVisee, onChute } = {}) {
+  constructor(canvas, { onTir, onChoc, onVisee, onChute, onRoule } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.onTir = onTir;
     this.onChoc = onChoc;
     this.onVisee = onVisee;
     this.onChute = onChute;
+    this.onRoule = onRoule;
     this.vivants = 0;
     this.partie = null;
     this.effets = new Effets();
@@ -59,7 +60,15 @@ export class Rendu {
     this.effets.vider();
     // Le sol de la partie décide de la texture de la piste.
     const sol = partie?.moteur.sol.id ?? this.solId;
-    if (sol && sol !== this.solId) {
+    // La longueur du terrain change la géométrie : caméra, décor et position des joueurs sont refaits.
+    if (TERRAIN.h !== this.hauteurVue) {
+      this.hauteurVue = TERRAIN.h;
+      this.solId = sol;
+      this.texture = null;
+      this.cam = null;
+      this.persos = [positionRepos(0), positionRepos(1)];
+      this.mesurer();
+    } else if (sol && sol !== this.solId) {
       this.solId = sol;
       this.texture = null;
       if (this.cam) this.construire();
@@ -74,7 +83,7 @@ export class Rendu {
     requestAnimationFrame(this.boucle);
   }
 
-  arreter() { this.actif = false; }
+  arreter() { this.actif = false; this.onRoule?.(0); }
 
   // Mesure unique par redimensionnement : pas de lecture de layout dans la boucle.
   mesurer() {
@@ -254,12 +263,21 @@ export class Rendu {
     // Chocs produits par la physique → effets visuels et sonores (lecture seule).
     if (etat.chocs.length) {
       for (const ch of etat.chocs) {
-        if (ch.force < 25) continue;
-        if (!reduit.matches) this.effets.impact(ch.x, ch.y, ch.force, !ch.jack && ch.force > 120);
+        if (ch.atterri) { this.onChoc?.(ch); continue; }   // atterrissage : son seulement
+        if (ch.force < 12) continue;
+        if (!reduit.matches && ch.force >= 25) this.effets.impact(ch.x, ch.y, ch.force, !ch.jack && ch.force > 120);
         this.onChoc?.(ch);
       }
       etat.chocs.length = 0;
     }
+    // Roulement : l'objet au sol le plus rapide donne le volume.
+    let rapide = 0;
+    for (const o of etat.objets) {
+      if (!o.vivant || o.air > 0) continue;
+      const v = Math.sqrt(o.vx * o.vx + o.vy * o.vy);
+      if (v > rapide) rapide = v;
+    }
+    this.onRoule?.(rapide);
     this.effets.maj(dt);
     this.effets.dessinerDecalques(ctx, cam);
 
@@ -304,7 +322,7 @@ export class Rendu {
     const actif = this.geste?.equipe ?? partie.moteur.tour;
     const mains = [null, null];
     for (const e of [1 - actif, actif]) {
-      const cible = e === actif ? POSTE : positionRepos(e);
+      const cible = e === actif ? poste() : positionRepos(e);
       const p = this.persos[e];
       const a = 1 - Math.exp(-dt / 140);
       p.x = lerp(p.x, cible.x, a);

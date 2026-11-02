@@ -2,7 +2,8 @@
 // Règles : pas fixe, uniquement + - * / sqrt abs min max round, ordre d'itération
 // par indice croissant. Aucune trigonométrie native : table pré-calculée par série.
 
-export const TERRAIN = { l: 360, h: 640, marge: 40 };
+// h et k varient avec la longueur choisie (fixerLongueur) ; l et marge ne bougent pas.
+export const TERRAIN = { l: 360, h: 640, marge: 40, k: 1 };
 export const RAYON = 9;
 export const JACK_R = 4.5;
 export const PAS = 1 / 120;
@@ -15,14 +16,30 @@ export const T_VOL = 0.8;      // durée du vol à puissance 1, en secondes (∝
 // Distance parcourue en l'air (jusqu'au point de chute) : linéaire en la puissance.
 export const PORTEE_AIR = V_LANCER * T_VOL;
 
-// Surfaces de jeu. frottement : décélération de roulement (unités/s²) ; impact : part de la vitesse
-// conservée à l'atterrissage ; cailloux : nombre de petits cailloux semés à chaque mène.
+// Surfaces de jeu, de la plus roulante à la plus freinante. frottement : décélération de roulement
+// (unités/s²) ; impact : part de la vitesse conservée à l'atterrissage.
 export const SOLS = {
-  lisse: { id: 'lisse', nom: 'Lisse', frottement: 260, impact: 0.5, cailloux: 0 },
-  terre: { id: 'terre', nom: 'Terre', frottement: 260, impact: 0.5, cailloux: 7 },
-  gravier: { id: 'gravier', nom: 'Gravier', frottement: 380, impact: 0.45, cailloux: 12 },
+  lisse: { id: 'lisse', nom: 'Lisse', frottement: 200, impact: 0.5 },
+  terre: { id: 'terre', nom: 'Terre', frottement: 260, impact: 0.5 },
+  gravier: { id: 'gravier', nom: 'Gravier', frottement: 380, impact: 0.45 },
 };
 export const SOL_DEFAUT = 'terre';
+
+// Petits cailloux semés à chaque mène, réglés en pourcentage de CAILLOUX_MAX (30 % = 7 cailloux).
+export const CAILLOUX_MAX = 24;
+export const CAILLOUX_DEFAUT = 30;
+export function nombreCailloux(pourcent) {
+  return Math.round((Math.min(100, Math.max(0, pourcent)) * CAILLOUX_MAX) / 100);
+}
+
+// Longueur du terrain : h = hauteur du terrain, k = échelle de la distance du cochonnet.
+// Le cercle de lancer reste à 74 unités du bord, le fond s'éloigne ou se rapproche.
+export const LONGUEURS = {
+  court: { id: 'court', nom: 'Court', h: 540, k: 0.7 },
+  normal: { id: 'normal', nom: 'Normal', h: 640, k: 1 },
+  long: { id: 'long', nom: 'Long', h: 780, k: 1.3 },
+};
+export const LONGUEUR_DEFAUT = 'normal';
 
 // Portée totale (vol + roulement) à puissance 1 sur un sol donné.
 export function portee(sol) {
@@ -35,11 +52,21 @@ export const JACK_DIST_MAX = 450;
 
 // Puissance réellement appliquée au cochonnet : le geste 0..1 est étalé sur la fourchette autorisée.
 export function puissanceCochonnet(p, sol) {
-  const d = JACK_DIST_MIN + normaliserPuissance(p) * (JACK_DIST_MAX - JACK_DIST_MIN);
+  const d = (JACK_DIST_MIN + normaliserPuissance(p) * (JACK_DIST_MAX - JACK_DIST_MIN)) * TERRAIN.k;
   return d / portee(sol);
 }
 export const MAX_PAS = 1680;
 export const LANCER = { x: 180, y: 566 };
+
+// Applique la longueur au terrain partagé (physique, décor, caméra). À appeler à la création
+// d'une partie : tous les joueurs d'un duel jouent à la longueur normale.
+export function fixerLongueur(id) {
+  const l = LONGUEURS[id] || LONGUEURS[LONGUEUR_DEFAUT];
+  TERRAIN.h = l.h;
+  TERRAIN.k = l.k;
+  LANCER.y = l.h - 74;
+  return l;
+}
 
 const RESTITUTION = 0.92;
 const MASSE_BOULE = 1;
@@ -160,7 +187,7 @@ function cailloux(etat, o) {
     const vy = o.vy + d * o.vx;
     o.vx = vx * PERTE_CAILLOU;
     o.vy = vy * PERTE_CAILLOU;
-    etat.chocs.push({ x: c.x, y: c.y, force: 30, jack: true });
+    etat.chocs.push({ x: c.x, y: c.y, force: 30, jack: true, caillou: true });
   }
 }
 
@@ -184,6 +211,8 @@ function integrer(etat) {
           o.vivant = false;
           o.vx = 0;
           o.vy = 0;
+        } else {
+          etat.chocs.push({ x: o.x, y: o.y, force: Math.sqrt(o.vx * o.vx + o.vy * o.vy), jack: o.jack, atterri: true });
         }
       }
       continue;

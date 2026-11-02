@@ -6,7 +6,6 @@ import { mulberry32 } from '../core/rng.js';
 const HAUTEUR = 600;                 // hauteur de la caméra au-dessus du sol
 const TANGAGE = (50 * Math.PI) / 180;
 const LACET = (35 * Math.PI) / 180;  // rotation de la vue autour de la verticale
-const PIVOT = { x: TERRAIN.l / 2, y: 330 };
 const DISTANCE = 336;                // recul de la caméra par rapport au pivot
 
 // Les boules et le cochonnet sont dessinés un peu plus gros que leur rayon physique,
@@ -22,7 +21,9 @@ export class Camera {
     this.cl = Math.cos(LACET);
     this.sl = Math.sin(LACET);
     // Position de la caméra dans le terrain, pour savoir quelles faces sont visibles.
-    this.pos = { x: PIVOT.x + DISTANCE * this.sl, y: PIVOT.y + DISTANCE * this.cl, z: HAUTEUR };
+    // Pivot au milieu du terrain (330 pour la longueur normale), donc fonction de la longueur choisie.
+    this.pivot = { x: TERRAIN.l / 2, y: TERRAIN.h / 2 + 10 };
+    this.pos = { x: this.pivot.x + DISTANCE * this.sl, y: this.pivot.y + DISTANCE * this.cl, z: HAUTEUR };
     this.f = 1;
     this.cx = 0;
     this.cy = 0;
@@ -49,8 +50,8 @@ export class Camera {
 
   // Coordonnées d'écran pour f = 1, centrées sur l'axe optique.
   normalise(x, y, hauteur) {
-    const dx = x - PIVOT.x;
-    const dy = y - PIVOT.y;
+    const dx = x - this.pivot.x;
+    const dy = y - this.pivot.y;
     const rx = dx * this.cl - dy * this.sl;
     const ry = dx * this.sl + dy * this.cl;
     const u = DISTANCE - ry;

@@ -1,6 +1,6 @@
 // node tests/physique.test.mjs
 import assert from 'node:assert/strict';
-import { creerEtat, ajouterBoule, lancer, step, sinCos, LANCER, MAX_PAS, SOLS, portee, puissanceCochonnet, JACK_DIST_MIN, JACK_DIST_MAX } from '../js/core/physique.js';
+import { creerEtat, ajouterBoule, lancer, step, sinCos, LANCER, TERRAIN, MAX_PAS, SOLS, portee, LONGUEURS, nombreCailloux, fixerLongueur, puissanceCochonnet, JACK_DIST_MIN, JACK_DIST_MAX } from '../js/core/physique.js';
 import { Moteur, rejouer, semerCailloux } from '../js/core/partie.js';
 import { executerReference } from './scenario.js';
 
@@ -25,7 +25,7 @@ assert.equal(e.objets[b].x, LANCER.x);
 
 // Cloche : la portée totale est linéaire en la puissance sur chaque sol, et la boule est bien en l'air au début.
 for (const sol of Object.values(SOLS)) {
-  for (const p of [0.2, 0.5, 0.7]) {
+  for (const p of [0.2, 0.5, 0.65]) {
     const ec = creerEtat({ x: 30, y: 30 }, sol);
     const bc = ajouterBoule(ec, 0);
     lancer(ec, bc, 27000, p);
@@ -47,7 +47,7 @@ const roule = (sol) => {
   return yChute - ec.objets[bc].y;
 };
 assert.ok(roule(SOLS.terre) > roule(SOLS.gravier), 'la terre roule plus que le gravier');
-assert.ok(Math.abs(roule(SOLS.lisse) - roule(SOLS.terre)) < 1e-9, 'lisse et terre roulent pareil (seuls les cailloux diffèrent)');
+assert.ok(roule(SOLS.lisse) > roule(SOLS.terre), 'lisse roule plus que terre');
 
 // Un caillou dévie une boule qui roule dessus, une seule fois, du côté opposé.
 const sans = creerEtat({ x: 30, y: 30 });
@@ -111,3 +111,33 @@ assert.equal(new Moteur(1, 3, 'terre', 13).but, 13);
 const long = rejouer(123456789, Array.from({ length: 200 }, (_, i) => ({ seq: i, angle: 27000, puissance: 0.6 })), 3, 'terre', 13);
 assert.ok(long.fini ? Math.max(...long.scores) >= 13 : Math.max(...long.scores) < 13, 'partie à 13 points');
 console.log('OK');
+
+// Atterrissage : un choc sonore est émis une fois par lancer, au point de chute.
+{
+  const ec = creerEtat({ x: 30, y: 30 }, SOLS.terre);
+  const bc = ajouterBoule(ec, 0);
+  lancer(ec, bc, 27000, 0.5);
+  while (!step(ec));
+  assert.equal(ec.chocs.filter((ch) => ch.atterri).length, 1, 'un seul atterrissage');
+}
+
+// Réglages : pourcentage de cailloux et longueur du terrain.
+assert.equal(nombreCailloux(0), 0);
+assert.equal(nombreCailloux(30), 7);
+assert.equal(nombreCailloux(100), 24);
+for (const l of Object.values(LONGUEURS)) {
+  const m = new Moteur(5, 3, 'terre', 5, { cailloux: 30, longueur: l.id });
+  assert.equal(TERRAIN.h, l.h);
+  assert.equal(LANCER.y, l.h - 74);
+  assert.equal(m.etat.cailloux.length, 7);
+  for (const c of m.etat.cailloux) assert.ok(c.y >= 95 && c.y < l.h - 165, `caillou dans la piste (${l.id})`);
+  m.preparer(27000, 0.5);
+  while (!step(m.etat));
+  const dj = LANCER.y - m.etat.objets[0].y;
+  assert.ok(dj > JACK_DIST_MIN * l.k - 40 && dj < JACK_DIST_MAX * l.k + 40, `cochonnet ${l.id} : ${dj}`);
+  assert.ok(m.etat.objets[0].vivant, `cochonnet sur le terrain (${l.id})`);
+}
+assert.equal(new Moteur(5, 3, 'terre', 5, { cailloux: 0 }).etat.cailloux.length, 0);
+fixerLongueur('normal');
+assert.equal(TERRAIN.h, 640);
+console.log('réglages OK');
