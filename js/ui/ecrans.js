@@ -36,10 +36,10 @@ export function joueurs(noms, avatars) {
   }
 }
 
-export function hud({ scores, restantes, mene, tour, cote, enVol, texte }) {
+export function hud({ scores, restantes, total, mene, tour, cote, enVol, texte }) {
   for (const i of [0, 1]) {
     $(`hud-score-${i}`).textContent = scores[i];
-    $(`hud-boules-${i}`).textContent = '●'.repeat(restantes[i]) + '○'.repeat(4 - restantes[i]);
+    $(`hud-boules-${i}`).textContent = '●'.repeat(restantes[i]) + '○'.repeat(total - restantes[i]);
     $(`hud-boules-${i}`).setAttribute('aria-label', `${restantes[i]} boule${restantes[i] > 1 ? 's' : ''} restante${restantes[i] > 1 ? 's' : ''}`);
     $(`hud-score-${i}`).closest('.chip').classList.toggle('est-au-tour', !enVol && tour === i);
   }

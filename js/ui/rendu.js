@@ -1,18 +1,26 @@
-import { TERRAIN, LANCER, RAYON, sinCos, distance } from '../core/physique.js';
+import { TERRAIN, LANCER, RAYON, V_MAX, FRICTION, sinCos, distance } from '../core/physique.js';
 import { meilleures } from '../core/partie.js';
-import {
-  dessinerTerrain, dessinerOmbre, dessinerBoule, dessinerCochonnet,
-  dessinerViseur, Effets, viderCaches,
-} from './matieres.js';
+import { dessinerTerrain, spriteBoule, Effets, viderCaches } from './matieres.js';
+import { Camera, peindreDecor, ombreSol, cochonnet, viseur, GROSSISSEMENT } from './vue3d.js';
+import { dessinerPerso, positionRepos, POSTE } from './perso.js';
 
-const DRAG_MAX = 150;     // unités logiques pour la puissance pleine
+const DRAG_MAX = 150;     // unités du terrain pour la puissance pleine
 const PUISSANCE_MIN = 0.04;
 const ANGLE_DEFAUT = 27000;
+const PORTEE = (V_MAX * V_MAX) / (2 * FRICTION);   // arrivée estimée à puissance 1, sans choc
+const TEX = 2;            // pixels de texture par unité du terrain
+const GROSSISSEMENT_JACK = 2.2;
+const SPRITE_R = 40;      // rayon de référence des sprites de boule, réduit ou agrandi au dessin
+const DUREE_GESTE = 560;  // ms ; la boule part à RELACHE × DUREE_GESTE
+const RELACHE = 0.68;
 const reduit = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 function vibrer(ms) {
   try { navigator.vibrate?.(ms); } catch { /* API absente ou bloquée */ }
 }
+
+const lerp = (a, b, t) => a + (b - a) * t;
+const adoucir = (t) => t * t * (3 - 2 * t);
 
 export class Rendu {
   constructor(canvas, { onTir, onChoc, onVisee, onChute } = {}) {
@@ -25,12 +33,17 @@ export class Rendu {
     this.vivants = 0;
     this.partie = null;
     this.effets = new Effets();
-    this.couche = document.createElement('canvas');
+    this.decor = document.createElement('canvas');
+    this.texture = null;
+    this.cam = null;
     this.visee = null;           // { cd, p } pendant le geste ou au clavier
     this.drag = null;
     this.etatVu = null;
     this.actif = false;
     this.dernierT = 0;
+    this.geste = null;           // lancer en cours : { equipe, t0, p, lache }
+    this.vol = null;             // trajectoire visuelle de la dernière boule lâchée
+    this.persos = [positionRepos(0), positionRepos(1)];
     this.mesurer();
     this.ecouter();
     this.boucle = this.boucle.bind(this);
@@ -40,6 +53,8 @@ export class Rendu {
     this.partie = partie;
     this.visee = null;
     this.drag = null;
+    this.geste = null;
+    this.vol = null;
     this.effets.vider();
   }
 
@@ -59,27 +74,29 @@ export class Rendu {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const l = Math.max(1, Math.round(rect.width * dpr));
     const h = Math.max(1, Math.round(rect.height * dpr));
-    if (l === this.canvas.width && h === this.canvas.height && this.echelle) return;
+    if (l === this.canvas.width && h === this.canvas.height && this.cam) return;
     this.canvas.width = l;
     this.canvas.height = h;
     this.dpr = dpr;
     this.rect = rect;
-    // Échelle « cover » centrée
-    this.echelle = Math.max(l / TERRAIN.l, h / TERRAIN.h);
-    this.ox = (l - TERRAIN.l * this.echelle) / 2;
-    this.oy = (h - TERRAIN.h * this.echelle) / 2;
+    this.unite = h / TERRAIN.h;   // pixels d'écran par unité, pour convertir le geste du doigt
     viderCaches();
-    this.couche.width = l;
-    this.couche.height = h;
-    const c = this.couche.getContext('2d');
-    c.setTransform(this.echelle, 0, 0, this.echelle, this.ox, this.oy);
-    dessinerTerrain(c, TERRAIN.l, TERRAIN.h, TERRAIN.marge);
+    if (!this.texture) {
+      this.texture = document.createElement('canvas');
+      this.texture.width = TERRAIN.l * TEX;
+      this.texture.height = TERRAIN.h * TEX;
+      const t = this.texture.getContext('2d');
+      t.scale(TEX, TEX);
+      dessinerTerrain(t, TERRAIN.l, TERRAIN.h, TERRAIN.marge);
+    }
+    this.cam = new Camera(l, h);
+    this.decor.width = l;
+    this.decor.height = h;
+    peindreDecor(this.decor.getContext('2d'), this.cam, this.texture, TEX);
   }
 
-  versLogique(clientX, clientY) {
-    const x = (clientX - this.rect.left) * this.dpr;
-    const y = (clientY - this.rect.top) * this.dpr;
-    return { x: (x - this.ox) / this.echelle, y: (y - this.oy) / this.echelle };
+  coord(clientX, clientY) {
+    return { x: (clientX - this.rect.left) * this.dpr, y: (clientY - this.rect.top) * this.dpr };
   }
 
   peutViser() {
@@ -91,16 +108,16 @@ export class Rendu {
     c.addEventListener('pointerdown', (e) => {
       if (!this.peutViser() || this.drag) return;
       c.setPointerCapture(e.pointerId);
-      this.drag = { id: e.pointerId, depart: this.versLogique(e.clientX, e.clientY) };
+      this.drag = { id: e.pointerId, depart: this.coord(e.clientX, e.clientY) };
       this.visee = null;
       vibrer(8);
       e.preventDefault();
     });
     c.addEventListener('pointermove', (e) => {
       if (!this.drag || e.pointerId !== this.drag.id) return;
-      const p = this.versLogique(e.clientX, e.clientY);
-      const dx = this.drag.depart.x - p.x;
-      const dy = this.drag.depart.y - p.y;
+      const p = this.coord(e.clientX, e.clientY);
+      const dx = (this.drag.depart.x - p.x) / this.unite;
+      const dy = (this.drag.depart.y - p.y) / this.unite;
       const long = Math.sqrt(dx * dx + dy * dy);
       if (long < 4) { this.visee = null; return; }
       const cd = Math.round((Math.atan2(dy, dx) * 18000) / Math.PI);
@@ -149,6 +166,20 @@ export class Rendu {
     window.addEventListener('resize', () => { if (this.actif) this.mesurer(); });
   }
 
+  // Geste de lancer : la promesse se résout quand la main lâche la boule. La physique démarre alors.
+  lancerGeste(equipe, puissance) {
+    if (reduit.matches || !this.actif) return Promise.resolve();
+    const g = { equipe, t0: performance.now(), p: puissance, lache: false };
+    this.geste = g;
+    return new Promise((ok) => {
+      setTimeout(() => {
+        g.lache = true;
+        this.vol = { t0: performance.now(), T: 250 + 350 * puissance, main: g.main };
+        ok();
+      }, DUREE_GESTE * RELACHE);
+    });
+  }
+
   boucle(t) {
     if (!this.actif) return;
     const dt = Math.min(64, t - this.dernierT);
@@ -157,18 +188,45 @@ export class Rendu {
     requestAnimationFrame(this.boucle);
   }
 
+  // Bras, buste et jambes d'un joueur selon ce qu'il fait à cet instant.
+  pose(equipe, t) {
+    const g = this.geste;
+    const repos = { bras: -0.12 + 0.03 * Math.sin(t / 600 + equipe), penche: 0, pas: 0.25 * Math.sin(t / 900 + equipe * 2) };
+    if (g && g.equipe === equipe) {
+      const ph = (t - g.t0) / DUREE_GESTE;
+      if (ph >= 1.5) { this.geste = null; return repos; }
+      const depart = -0.3 - g.p * 0.6;
+      const arriere = -1.15;
+      if (ph < 0.38) {
+        const k = adoucir(ph / 0.38);
+        return { bras: lerp(depart, arriere, k), penche: lerp(-4 * g.p, -6, k), pas: 0 };
+      }
+      if (ph < RELACHE + 0.12) {
+        const k = adoucir((ph - 0.38) / (RELACHE + 0.12 - 0.38));
+        return { bras: lerp(arriere, 1.0, k), penche: lerp(-6, 6, k), pas: k * 2.4 };
+      }
+      const k = adoucir(Math.min(1, (ph - RELACHE - 0.12) / 0.7));
+      return { bras: lerp(1.0, repos.bras, k), penche: lerp(6, 0, k), pas: lerp(2.4, 0, k) };
+    }
+    if (this.visee && this.peutViser() && equipe === this.partie.cote) {
+      return { bras: -0.3 - this.visee.p * 0.6, penche: -4 * this.visee.p, pas: 0 };
+    }
+    return repos;
+  }
+
   dessiner(t, dt) {
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(this.couche, 0, 0);
+    ctx.drawImage(this.decor, 0, 0);
     const partie = this.partie;
     if (!partie) return;
-    ctx.setTransform(this.echelle, 0, 0, this.echelle, this.ox, this.oy);
+    const cam = this.cam;
     const etat = partie.etat;
     if (etat !== this.etatVu) {
       this.effets.vider();
       this.etatVu = etat;
       this.vivants = 0;
+      this.vol = null;
     }
     let vivants = 0;
     for (const o of etat.objets) if (o.vivant) vivants++;
@@ -185,37 +243,103 @@ export class Rendu {
       etat.chocs.length = 0;
     }
     this.effets.maj(dt);
+    this.effets.dessinerDecalques(ctx, cam);
 
-    // Couches : décalques → ombres → boules → cochonnet → viseur → particules
-    this.effets.dessinerDecalques(ctx);
     const objets = etat.objets;
-    const enMain = this.bouleEnMain();
-    for (let i = 1; i < objets.length; i++) {
-      const o = objets[i];
-      if (o.vivant) dessinerOmbre(ctx, o.x, o.y, o.r, this.echelle);
+    const enVolIdx = this.vol && t - this.vol.t0 < this.vol.T ? objets.length - 1 : -1;
+    // Boule en vol : position visuelle = position physique + hauteur de l'arc + écart avec la main.
+    let aerienne = null;
+    if (enVolIdx > 0 && objets[enVolIdx].vivant) {
+      const k = (t - this.vol.t0) / this.vol.T;
+      const o = objets[enVolIdx];
+      const main = this.vol.main;
+      const r = (1 - Math.min(1, (t - this.vol.t0) / 140)) ** 2;
+      aerienne = {
+        i: enVolIdx,
+        x: o.x + (main ? (main.x - LANCER.x) * r : 0),
+        y: o.y + (main ? (main.y - LANCER.y) * r : 0),
+        h: RAYON + (1 - k) ** 2 * (main ? main.z - RAYON : 40) * 0.9 + Math.sin(Math.PI * k) * 14,
+      };
     }
-    if (enMain) dessinerOmbre(ctx, LANCER.x, LANCER.y, RAYON, this.echelle);
-    if (objets[0].vivant) dessinerOmbre(ctx, objets[0].x, objets[0].y, objets[0].r * 0.7, this.echelle);
 
-    for (let i = 1; i < objets.length; i++) {
+    // Ombres puis corps, du fond vers le premier plan.
+    const ordre = [];
+    for (let i = 0; i < objets.length; i++) if (objets[i].vivant && i !== enVolIdx) ordre.push(i);
+    ordre.sort((a, b) => objets[a].y - objets[b].y);
+    for (const i of ordre) {
       const o = objets[i];
-      if (o.vivant) dessinerBoule(ctx, o.x, o.y, o.r, o.equipe, i, this.echelle);
+      ombreSol(ctx, cam, o.x, o.y, o.r * (i === 0 ? 1.1 : 1), i === 0 ? 0.32 : 0.42);
     }
-    if (enMain) dessinerBoule(ctx, LANCER.x, LANCER.y, RAYON, enMain.equipe, enMain.index, this.echelle, enMain.alpha);
+    if (aerienne) ombreSol(ctx, cam, objets[aerienne.i].x, objets[aerienne.i].y, RAYON * 1.1, 0.3);
+    for (const i of ordre) {
+      const o = objets[i];
+      if (i === 0) {
+        const c = cam.projeter(o.x, o.y, o.r);
+        cochonnet(ctx, c.x, c.y, o.r * c.k * GROSSISSEMENT_JACK, t, reduit.matches);
+      } else {
+        this.boule(ctx, o.x, o.y, o.r, o.equipe, i, 1);
+      }
+    }
 
     if (partie.vue) this.dessinerPoints(ctx, etat);
 
-    const jack = objets[0];
-    if (jack.vivant) dessinerCochonnet(ctx, jack.x, jack.y, jack.r, t, reduit.matches);
-
     if (this.visee && this.peutViser()) {
       const { s, c } = sinCos(this.visee.cd);
-      dessinerViseur(ctx, LANCER.x, LANCER.y, c, s, this.visee.p);
+      const d = PORTEE * this.visee.p;
+      viseur(ctx, cam, LANCER.x, LANCER.y, LANCER.x + c * d, LANCER.y + s * d);
     }
-    this.effets.dessinerParticules(ctx);
+
+    // Joueurs : celui qui lance au cercle, l'autre à côté ; ils glissent de l'un à l'autre.
+    const actif = this.geste?.equipe ?? partie.moteur.tour;
+    const mains = [null, null];
+    for (const e of [1 - actif, actif]) {
+      const cible = e === actif ? POSTE : positionRepos(e);
+      const p = this.persos[e];
+      const a = 1 - Math.exp(-dt / 140);
+      p.x = lerp(p.x, cible.x, a);
+      p.y = lerp(p.y, cible.y, a);
+      mains[e] = dessinerPerso(ctx, cam, { x: p.x, y: p.y, equipe: e, pose: this.pose(e, t) });
+    }
+
+    // Boule tenue en main, puis boule en l'air (devant le joueur).
+    const g = this.geste;
+    const enMain = this.bouleEnMain();
+    if (g && !g.lache) {
+      g.main = mains[g.equipe];
+      this.bouleMain(ctx, g.main, g.equipe, objets.length, 1);
+    } else if (enMain && mains[enMain.equipe]) {
+      this.bouleMain(ctx, mains[enMain.equipe], enMain.equipe, enMain.index, enMain.alpha);
+    }
+    if (aerienne) {
+      const o = objets[aerienne.i];
+      const c = cam.projeter(aerienne.x, aerienne.y, aerienne.h);
+      this.spriteAt(ctx, c.x, c.y, RAYON * c.k * GROSSISSEMENT, o.equipe, aerienne.i, 1);
+    }
+
+    this.effets.dessinerParticules(ctx, cam);
   }
 
-  // Prochaine boule posée dans le cercle de lancer.
+  boule(ctx, x, y, r, equipe, index, alpha) {
+    const c = this.cam.projeter(x, y, r);
+    this.spriteAt(ctx, c.x, c.y, r * c.k * GROSSISSEMENT, equipe, index, alpha);
+  }
+
+  // Dans la main d'un joueur rapetissé : boule plus petite que celle qui roule.
+  bouleMain(ctx, main, equipe, index, alpha) {
+    const c = this.cam.projeter(main.x, main.y, main.z);
+    this.spriteAt(ctx, c.x, c.y, RAYON * c.k * GROSSISSEMENT * 0.72, equipe, index, alpha);
+  }
+
+  spriteAt(ctx, x, y, rayon, equipe, index, alpha) {
+    const s = spriteBoule(equipe, index % 6, SPRITE_R, 1);
+    const facteur = rayon / SPRITE_R;
+    const taille = s.c.width * facteur;
+    if (alpha !== 1) ctx.globalAlpha = alpha;
+    ctx.drawImage(s.c, x - s.m * facteur, y - s.m * facteur, taille, taille);
+    if (alpha !== 1) ctx.globalAlpha = 1;
+  }
+
+  // Prochaine boule du joueur dont c'est le tour, tenue en main.
   bouleEnMain() {
     const p = this.partie;
     if (!p || p.enVol || p.fini || p.vue) return null;
@@ -224,24 +348,27 @@ export class Rendu {
     return {
       equipe: m.tour,
       index: m.etat.objets.length,
-      alpha: m.tour === p.cote ? 1 : 0.55,
+      alpha: m.tour === p.cote ? 1 : 0.7,
     };
   }
 
-  // Fin de mène : cercle autour des boules qui marquent.
+  // Fin de mène : anneau autour des boules qui marquent.
   dessinerPoints(ctx, etat) {
     const best = meilleures(etat);
     if (best[0] === best[1]) return;
     const g = best[0] < best[1] ? 0 : 1;
     const jack = etat.objets[0];
+    const cam = this.cam;
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,122,69,.9)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,150,95,.95)';
     for (let i = 1; i < etat.objets.length; i++) {
       const o = etat.objets[i];
       if (o.vivant && o.equipe === g && distance(o, jack) < best[1 - g]) {
+        const c = cam.projeter(o.x, o.y, 0);
+        const ry = Math.abs(cam.projeter(o.x, o.y + o.r + 5, 0).y - cam.projeter(o.x, o.y - o.r - 5, 0).y) / 2;
+        ctx.lineWidth = Math.max(1.5, c.k * 1.4);
         ctx.beginPath();
-        ctx.arc(o.x, o.y, o.r + 4, 0, Math.PI * 2);
+        ctx.ellipse(c.x, c.y, (o.r + 5) * c.k * GROSSISSEMENT, ry * GROSSISSEMENT, 0, 0, Math.PI * 2);
         ctx.stroke();
       }
     }

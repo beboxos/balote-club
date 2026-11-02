@@ -15,6 +15,6 @@ export function coupsReference(n = 64) {
 }
 
 export function executerReference() {
-  const m = rejouer(GRAINE, coupsReference());
+  const m = rejouer(GRAINE, coupsReference(), 4);
   return { empreinte: empreinte(m.etat), scores: m.scores.slice(), mene: m.mene, fini: m.fini };
 }

@@ -1,10 +1,7 @@
 // Rendu procédural du gameplay : aucune image téléchargée.
-// Soleil haut-gauche : ombre portée (+3, +4), spéculaire haut-gauche, rim light bas-droite.
+// Soleil haut-gauche : spéculaire haut-gauche, rim light bas-droite.
 import { mulberry32 } from '../core/rng.js';
 import { LANCER } from '../core/physique.js';
-
-const OMBRE_DX = 3;
-const OMBRE_DY = 4;
 
 export const TEINTES = {
   0: ['#f0a17c', '#c4552a', '#7d2f14'],
@@ -57,9 +54,9 @@ export function textureArgile(ctx) {
   const c = canvasHorsEcran(T, T);
   const g = c.getContext('2d');
   const img = g.createImageData(T, T);
-  // Palette #3a2a20 → #241a15
-  const A = [0x3a, 0x2a, 0x20];
-  const B = [0x24, 0x1a, 0x15];
+  // Terre battue : sable ocre, un peu plus sombre dans les creux
+  const A = [0xb0, 0x8a, 0x66];
+  const B = [0x8e, 0x6a, 0x4b];
   for (let i = 0; i < T * T; i++) {
     const grain = rng() * 0.18;
     const v = o1[i] * 0.62 + o2[i] * 0.38 + grain - 0.09;
@@ -72,7 +69,7 @@ export function textureArgile(ctx) {
   g.putImageData(img, 0, 0);
   // Gravillons clairs épars
   for (let i = 0; i < 260; i++) {
-    g.fillStyle = `rgba(200,170,145,${0.08 + rng() * 0.14})`;
+    g.fillStyle = `rgba(235,215,190,${0.1 + rng() * 0.16})`;
     g.beginPath();
     g.arc(rng() * T, rng() * T, 0.4 + rng() * 0.9, 0, Math.PI * 2);
     g.fill();
@@ -84,13 +81,13 @@ export function textureArgile(ctx) {
 // Terrain complet pré-composé dans un canvas (recalculé au redimensionnement seulement).
 export function dessinerTerrain(ctx, l, h, marge) {
   const fond = ctx.createLinearGradient(0, 0, 0, h);
-  fond.addColorStop(0, '#2c201a');
-  fond.addColorStop(1, '#1a1310');
+  fond.addColorStop(0, '#9b7856');
+  fond.addColorStop(1, '#836445');
   ctx.fillStyle = fond;
   ctx.fillRect(0, 0, l, h);
 
   // Bande hors-jeu
-  ctx.fillStyle = 'rgba(10,7,6,.55)';
+  ctx.fillStyle = 'rgba(40,28,18,.5)';
   ctx.fillRect(0, 0, l, h);
 
   // Piste
@@ -106,9 +103,9 @@ export function dessinerTerrain(ctx, l, h, marge) {
   ctx.globalAlpha = 1;
   // Lumière rasante de fin de journée, depuis le haut-gauche
   const soleil = ctx.createLinearGradient(marge, marge, l - marge, h * 0.7);
-  soleil.addColorStop(0, 'rgba(255,170,110,.14)');
-  soleil.addColorStop(0.55, 'rgba(255,170,110,.03)');
-  soleil.addColorStop(1, 'rgba(0,0,0,.12)');
+  soleil.addColorStop(0, 'rgba(255,200,140,.22)');
+  soleil.addColorStop(0.55, 'rgba(255,200,140,.04)');
+  soleil.addColorStop(1, 'rgba(40,20,10,.14)');
   ctx.fillStyle = soleil;
   ctx.fillRect(marge, marge, l - 2 * marge, h - 2 * marge);
   ctx.restore();
@@ -126,13 +123,6 @@ export function dessinerTerrain(ctx, l, h, marge) {
   ctx.arc(LANCER.x, LANCER.y, 16, 0, Math.PI * 2);
   ctx.stroke();
   ctx.setLineDash([]);
-
-  // Vignette radiale
-  const v = ctx.createRadialGradient(l / 2, h * 0.45, h * 0.2, l / 2, h * 0.45, h * 0.75);
-  v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,0,0,.55)');
-  ctx.fillStyle = v;
-  ctx.fillRect(0, 0, l, h);
 }
 
 // Flou portable (Safari < 18 ignore ctx.filter) : on dessine la forme hors cadre
@@ -150,48 +140,11 @@ function remplirFlou(g, flouPx, echelle, couleur, forme) {
   g.restore();
 }
 
-// ---------- Boules : sprites mis en cache par (équipe, index, échelle) ----------
+// ---------- Boules : sprites mis en cache par (équipe, index, rayon) ----------
 
 const cacheBoules = new Map();
-const cacheOmbres = new Map();
 
-function spriteOmbre(r, echelle) {
-  const cle = r + ':' + echelle;
-  if (cacheOmbres.has(cle)) return cacheOmbres.get(cle);
-  const pad = 6;
-  const taille = (r * 2 + pad * 2) * echelle;
-  const c = canvasHorsEcran(taille, taille);
-  const g = c.getContext('2d');
-  g.scale(echelle, echelle);
-  const m = r + pad;
-  remplirFlou(g, 3, echelle, 'rgba(0,0,0,.38)', (k) => {
-    k.beginPath();
-    k.ellipse(m, m, r, r * 0.92, 0, 0, Math.PI * 2);
-  });
-  const s = { c, m };
-  cacheOmbres.set(cle, s);
-  return s;
-}
-
-function spriteContact(r, echelle) {
-  const cle = 'contact:' + r + ':' + echelle;
-  if (cacheOmbres.has(cle)) return cacheOmbres.get(cle);
-  const pad = 4;
-  const taille = (r * 2 + pad * 2) * echelle;
-  const c = canvasHorsEcran(taille, taille);
-  const g = c.getContext('2d');
-  g.scale(echelle, echelle);
-  const m = r + pad;
-  remplirFlou(g, 2, echelle, 'rgba(0,0,0,.30)', (k) => {
-    k.beginPath();
-    k.arc(m, m, r * 0.92, 0, Math.PI * 2);
-  });
-  const s = { c, m };
-  cacheOmbres.set(cle, s);
-  return s;
-}
-
-function spriteBoule(equipe, index, r, echelle) {
+export function spriteBoule(equipe, index, r, echelle) {
   const cle = equipe + ':' + index + ':' + r + ':' + echelle;
   if (cacheBoules.has(cle)) return cacheBoules.get(cle);
   const pad = 4;
@@ -265,76 +218,6 @@ function spriteBoule(equipe, index, r, echelle) {
 
 export function viderCaches() {
   cacheBoules.clear();
-  cacheOmbres.clear();
-}
-
-export function dessinerOmbre(ctx, x, y, r, echelle) {
-  const s = spriteOmbre(r, echelle);
-  const t = s.c.width / echelle;
-  ctx.drawImage(s.c, x + OMBRE_DX - s.m, y + OMBRE_DY - s.m, t, t);
-}
-
-export function dessinerBoule(ctx, x, y, r, equipe, index, echelle, alpha = 1) {
-  const ct = spriteContact(r, echelle);
-  const tc = ct.c.width / echelle;
-  if (alpha !== 1) ctx.globalAlpha = alpha;
-  ctx.drawImage(ct.c, x - ct.m, y - ct.m, tc, tc);
-  const s = spriteBoule(equipe, index, r, echelle);
-  const t = s.c.width / echelle;
-  ctx.drawImage(s.c, x - s.m, y - s.m, t, t);
-  if (alpha !== 1) ctx.globalAlpha = 1;
-}
-
-// ---------- Cochonnet : halo pulsé sur 1,6 s (visuel) ----------
-
-export function dessinerCochonnet(ctx, x, y, r, tempsMs, calme = false) {
-  const phase = calme ? 0.5 : 0.5 + 0.5 * Math.sin((tempsMs / 1600) * Math.PI * 2);
-  ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,.35)';
-  ctx.beginPath();
-  ctx.ellipse(x + OMBRE_DX * 0.6, y + OMBRE_DY * 0.6, r, r * 0.9, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowColor = `rgba(245,215,110,${0.55 + 0.25 * phase})`;
-  ctx.shadowBlur = 14;
-  const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, 0, x, y, r);
-  g.addColorStop(0, '#fff6c9');
-  g.addColorStop(1, '#f7e07a');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-// ---------- Viseur ----------
-
-export function dessinerViseur(ctx, x, y, dx, dy, puissance) {
-  const long = 40 + puissance * 190;
-  const ex = x + dx * long;
-  const ey = y + dy * long;
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,122,69,.85)';
-  ctx.lineWidth = 1.6;
-  ctx.lineCap = 'round';
-  ctx.setLineDash([7, 9]);
-  ctx.beginPath();
-  ctx.moveTo(x + dx * 12, y + dy * 12);
-  ctx.lineTo(ex, ey);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  // Réticule 6 px
-  ctx.beginPath();
-  ctx.arc(ex, ey, 6, 0, Math.PI * 2);
-  ctx.moveTo(ex - 9, ey);
-  ctx.lineTo(ex - 3, ey);
-  ctx.moveTo(ex + 3, ey);
-  ctx.lineTo(ex + 9, ey);
-  ctx.moveTo(ex, ey - 9);
-  ctx.lineTo(ex, ey - 3);
-  ctx.moveTo(ex, ey + 3);
-  ctx.lineTo(ex, ey + 9);
-  ctx.stroke();
-  ctx.restore();
 }
 
 // ---------- Particules et décalques ----------
@@ -391,21 +274,24 @@ export class Effets {
     this.decalques = this.decalques.filter((d) => d.age < 3000);
   }
 
-  dessinerDecalques(ctx) {
+  dessinerDecalques(ctx, cam) {
     for (const d of this.decalques) {
-      ctx.fillStyle = `rgba(12,8,6,${0.18 * (1 - d.age / 3000)})`;
+      const c = cam.projeter(d.x, d.y, 0);
+      const ry = Math.abs(cam.projeter(d.x, d.y + d.r, 0).y - cam.projeter(d.x, d.y - d.r, 0).y) / 2;
+      ctx.fillStyle = `rgba(12,8,6,${0.22 * (1 - d.age / 3000)})`;
       ctx.beginPath();
-      ctx.ellipse(d.x, d.y, d.r * 1.3, d.r, 0, 0, Math.PI * 2);
+      ctx.ellipse(c.x, c.y, d.r * 1.3 * c.k, Math.max(0.8, ry), 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  dessinerParticules(ctx) {
+  dessinerParticules(ctx, cam) {
     for (const p of this.particules) {
       const t = 1 - p.vie / p.duree;
-      ctx.fillStyle = p.metal ? `rgba(255,217,168,${t})` : `rgba(200,170,145,${0.5 * t})`;
+      const c = cam.projeter(p.x, p.y, 2 + 8 * (1 - t));
+      ctx.fillStyle = p.metal ? `rgba(255,217,168,${t})` : `rgba(210,180,150,${0.7 * t})`;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.taille * (0.4 + 0.6 * t), 0, Math.PI * 2);
+      ctx.arc(c.x, c.y, Math.max(0.8, p.taille * c.k * (0.4 + 0.6 * t)), 0, Math.PI * 2);
       ctx.fill();
     }
   }

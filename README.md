@@ -1,7 +1,7 @@
 # Balote Club
 
-Pétanque tour par tour, mobile d'abord : solo contre le club (3 niveaux) ou duel à
-distance. Site 100 % statique (HTML, CSS, modules ES natifs), hébergé sur GitHub Pages ;
+Pétanque tour par tour, mobile d'abord, vue 3D derrière le lanceur : solo contre le club
+(3 niveaux, 2 à 4 boules) ou duel à distance (3 boules). Site 100 % statique (HTML, CSS, modules ES natifs), hébergé sur GitHub Pages ;
 le duel passe par Supabase (auth anonyme, Postgres, Realtime).
 
 ## Lancer en local
@@ -55,8 +55,10 @@ Tous les chemins sont relatifs, le site fonctionne donc aussi sous `https://<use
 | `js/core/bot.js` | Bot : simule des coups candidats puis ajoute une erreur gaussienne selon le niveau |
 | `js/net/reseau.js` | Auth anonyme, salons, journal `coups`, broadcast `partie:<id>` |
 | `js/net/reconnexion.js` | Réabonnement et rattrapage des coups après retour d'onglet ou coupure |
-| `js/ui/matieres.js` | Rendu procédural : argile, boules, cochonnet, viseur, particules |
-| `js/ui/rendu.js` | Canvas, échelle « cover », DPR ≤ 2, gestes et clavier |
+| `js/ui/vue3d.js` | Caméra en perspective, décor (ciel, arbres, piste), ombres, viseur au sol |
+| `js/ui/perso.js` | Joueurs en volumes simples, vus de dos, poses du lancer |
+| `js/ui/matieres.js` | Textures (terre battue), sprites de boules, particules et traces |
+| `js/ui/rendu.js` | Canvas, DPR ≤ 2, gestes et clavier, animation du lancer |
 
 Lockstep : seuls l'angle (centièmes de degré, entier) et la puissance (millièmes) d'un
 coup transitent. Chaque client simule le même résultat ; aucune position n'est transmise.

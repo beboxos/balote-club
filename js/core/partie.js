@@ -5,7 +5,9 @@ import {
 import { deriver } from './rng.js';
 
 export const BUT = 5;
-export const BOULES = 4;
+// Boules par équipe : 3 par défaut (tête-à-tête), réglable en solo. Les duels restent à 3.
+export const BOULES_DEFAUT = 3;
+export const BOULES_CHOIX = [2, 3, 4];
 
 // Cochonnet dans le tiers haut de la piste, tiré de la graine serveur (entiers seulement).
 export function positionJack(graine, mene, essai) {
@@ -43,8 +45,9 @@ export function compterMene(etat) {
 
 // Moteur de règles pur : aucune notion de temps ni de réseau.
 export class Moteur {
-  constructor(graine) {
+  constructor(graine, boules = BOULES_DEFAUT) {
     this.graine = graine;
+    this.boules = boules;
     this.scores = [0, 0];
     this.mene = 1;
     this.essai = 0;
@@ -60,7 +63,7 @@ export class Moteur {
     this.dernier = -1;
   }
 
-  restantes(e) { return BOULES - this.jouees[e]; }
+  restantes(e) { return this.boules - this.jouees[e]; }
 
   // Ajoute et lance la boule de l'équipe au tour. Le déplacement se fait par step().
   preparer(angle, puissance) {
@@ -80,7 +83,7 @@ export class Moteur {
       this.nouvelleMene();
       return { type: 'annulee' };
     }
-    if (this.jouees[0] === BOULES && this.jouees[1] === BOULES) {
+    if (this.jouees[0] === this.boules && this.jouees[1] === this.boules) {
       const { gagnant, points } = compterMene(this.etat);
       const mene = this.mene;
       if (gagnant >= 0) {
@@ -119,8 +122,8 @@ export class Moteur {
 }
 
 // Reconstruit l'état complet depuis le journal de coups (anti-triche et resynchro).
-export function rejouer(graine, coups) {
-  const m = new Moteur(graine);
+export function rejouer(graine, coups, boules = BOULES_DEFAUT) {
+  const m = new Moteur(graine, boules);
   for (const c of coups) {
     if (m.fini) break;
     m.jouerInstantane(c.angle, c.puissance);
@@ -134,13 +137,14 @@ const attendreFrame = () => new Promise((ok) => requestAnimationFrame(ok));
 export class Partie {
   // equipeAuteur(uid) → 0 / 1 / -1 : en duel, un coup distant n'est accepté que si son
   // auteur (garanti par RLS dans le journal) est bien l'équipe dont c'est le tour.
-  constructor({ graine, cote = 0, reseau = null, equipeAuteur = null, onTour, onCoup, onFin, onManche, onAnnulee }) {
+  constructor({ graine, cote = 0, reseau = null, equipeAuteur = null, boules = BOULES_DEFAUT, avantLancer, onTour, onCoup, onFin, onManche, onAnnulee }) {
     this.graine = graine;
+    this.boules = boules;
     this.equipeAuteur = equipeAuteur;
     this.cote = cote;
     this.reseau = reseau;
-    this.cb = { onTour, onCoup, onFin, onManche, onAnnulee };
-    this.moteur = new Moteur(graine);
+    this.cb = { avantLancer, onTour, onCoup, onFin, onManche, onAnnulee };
+    this.moteur = new Moteur(graine, boules);
     this.journal = [];
     this.enVol = false;
     this.file = Promise.resolve();
@@ -190,6 +194,8 @@ export class Partie {
       if (distant && this.equipeAuteur && this.equipeAuteur(coup.auteur) !== this.moteur.tour) return;
       this.journal.push(coup);
       this.enVol = true;
+      // Geste du lanceur avant le départ de la boule : purement visuel, la physique n'attend rien d'autre.
+      await this.cb.avantLancer?.({ equipe: this.moteur.tour, coup });
       const boule = this.moteur.preparer(coup.angle, coup.puissance);
       this.cb.onCoup?.({ boule, equipe: this.moteur.dernier, coup });
       await this.boucler();
@@ -227,7 +233,7 @@ export class Partie {
       await pause(1600);
     } else {
       // Le score affiché vient du journal rejoué, pas de l'état mémoire.
-      const verif = rejouer(this.graine, this.journal);
+      const verif = rejouer(this.graine, this.journal, this.boules);
       ev.scores = verif.scores.slice();
       this.moteur.scores = verif.scores.slice();
       this.cb.onManche?.(ev);
@@ -245,7 +251,7 @@ export class Partie {
     if (this.enVol) return false;
     const tries = coups.slice().sort((a, b) => a.seq - b.seq);
     const valides = [];
-    const m = new Moteur(this.graine);
+    const m = new Moteur(this.graine, this.boules);
     for (const c of tries) {
       if (c.seq !== valides.length || m.fini) break;
       if (this.equipeAuteur && this.equipeAuteur(c.auteur) !== m.tour) break;

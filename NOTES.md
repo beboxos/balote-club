@@ -21,6 +21,19 @@
 | 7, 12 | Transport par broadcast `partie:<id>` (`coup`, `abandon`) | Le broadcast n'est plus qu'un **signal**. Un coup n'est appliqué que s'il vient du journal `coups` (auteur garanti par RLS) **et** que son auteur est l'équipe au tour. Un abandon n'est cru que si `parties.statut = 'abandon'` côté serveur. Côté serveur, `seq` doit valoir le prochain numéro (`prochain_seq`) | Revue de sécurité : le canal broadcast est public. Quiconque connaît l'id pouvait injecter un faux coup ou un faux abandon. Le coût est une lecture du journal en plus par coup. |
 | 12 | Score recalculé depuis le journal | En fin de mène, le score affiché vient de `rejouer(graine, journal)`, et non de l'état en mémoire | Conforme. Le point d'accroche `demanderValidation()` (Edge Function `valider_partie`) est prévu dans `reseau.js`, sans implémentation. |
 
+## Évolutions après la v1 (retour de jeu)
+
+| Sujet | Avant | Maintenant | Justification |
+|---|---|---|---|
+| Vue | Terrain vu du dessus (ressemblait à un billard) | Caméra en perspective derrière le lanceur, ciel, haie, arbres, terre battue, planches de bordure | Retour de jeu : la vue du dessus ne faisait pas pétanque. La physique reste en 2D (x, y) et n'est pas touchée : seul l'affichage projette les positions. |
+| Joueurs | Aucun | Deux personnages en blocs (style Minecraft), vus de dos. Celui dont c'est le tour se tient au cercle, l'autre à côté | Lire le geste : bras en arrière selon la puissance pendant la visée, puis balancier et lâcher. |
+| Départ de la boule | Immédiat | Après le geste (environ 0,4 s). L'animation ne change pas la physique : elle retarde seulement le départ, de la même façon sur les deux appareils | Synchroniser la boule avec la main du joueur. La boule suit un petit arc visuel (hauteur) pendant son vol. |
+| Viseur | Trait de longueur arbitraire | Ligne au sol jusqu'au point d'arrêt estimé (puissance × 585 unités, sans choc) | Doser la force à l'œil. |
+| Boules par joueur | 4 | 3 par défaut, 2, 3 ou 4 au choix en solo | Les duels restent à 3 : le nombre de boules n'est pas stocké côté serveur (pas de changement de schéma). |
+| Taille à l'écran | Taille réelle | Boules ×1,2, cochonnet ×2,2, joueurs à 62 % | Au fond de la piste, les rayons réels tombent à quelques pixels. |
+
+L'empreinte de référence de `tests/determinisme.html` (`af2de690`) reste valable : le scénario est figé à 4 boules.
+
 ## Vérifié
 
 - Solo complet (navigateur, 375 × 667) : partie menée jusqu'à l'écran de fin, aucune erreur console.
@@ -41,6 +54,9 @@ Deux clients Node exécutent les vrais `reseau.js`, `reconnexion.js`, `partie.js
 - **Critère 4** : un troisième client anonyme ne voit ni la partie ni les coups, son insertion de coup est refusée par RLS, et `rejoindre` répond « Salon plein ». Un code inconnu répond « Salon inexistant ».
 
 ## Non vérifié
+
+- Vue 3D : contrôlée dans le navigateur intégré à 375 × 667 (parties solo complètes à 3 et 4 boules, poses du lancer). Pas encore sur de vrais téléphones ni sur d'autres formats d'écran.
+- Le geste du doigt dans la vue 3D (glisser vers l'arrière) n'a été exercé qu'au clavier et par appel direct, pas au toucher.
 
 - Critère 5 sur de vrais iPhone et Android : à faire avec `tests/determinisme.html`.
 - Duel entre deux navigateurs pilotés à la main : le parcours a été couvert par un navigateur face à un client Node, pas par deux navigateurs.

@@ -1,5 +1,5 @@
 import { AVATARS, STOCKAGE } from './config.js';
-import { Partie, BOULES } from './core/partie.js';
+import { Partie, BOULES_DEFAUT, BOULES_CHOIX } from './core/partie.js';
 import { jouerBot, NIVEAUX } from './core/bot.js';
 import { mulberry32 } from './core/rng.js';
 import { Rendu } from './ui/rendu.js';
@@ -20,6 +20,7 @@ const prefs = {
   pseudo: lire(STOCKAGE.pseudo, ''),
   avatar: AVATARS.includes(lire(STOCKAGE.avatar, '01')) ? lire(STOCKAGE.avatar, '01') : '01',
   niveau: Math.min(2, Math.max(0, Number(lire(STOCKAGE.niveau, '1')) || 0)),
+  boules: BOULES_CHOIX.includes(Number(lire(STOCKAGE.boules, ''))) ? Number(lire(STOCKAGE.boules, '')) : BOULES_DEFAUT,
 };
 
 // Session courante : solo ou duel.
@@ -50,7 +51,7 @@ function majHud(s, texte) {
   const p = s.partie;
   const m = p.moteur;
   ui.hud({
-    scores: m.scores, restantes: [BOULES - m.jouees[0], BOULES - m.jouees[1]],
+    scores: m.scores, restantes: [m.restantes(0), m.restantes(1)], total: m.boules,
     mene: m.mene, tour: m.tour, cote: p.cote, enVol: p.enVol,
     texte: texte ?? texteTour(s),
   });
@@ -63,7 +64,8 @@ function creerPartie(s, graine, cote, reseau) {
     ? (uid) => (uid === ligne.hote ? 0 : uid === ligne.invite ? 1 : -1)
     : null;
   const partie = new Partie({
-    graine, cote, reseau, equipeAuteur,
+    graine, cote, reseau, equipeAuteur, boules: s.boules,
+    avantLancer: ({ equipe, coup }) => rendu.lancerGeste(equipe, coup.puissance),
     onCoup: () => {
       audio.jouer('lancer', { volume: 0.8 });
       majHud(s, '');
@@ -135,6 +137,7 @@ function demarrerSolo() {
   const s = {
     solo: true,
     niveau: prefs.niveau,
+    boules: prefs.boules,
     rng: mulberry32(graine ^ 0x5eed),
     noms: [nomJoueur(), 'Le club'],
     avatars: [prefs.avatar, avatarBot],
@@ -358,6 +361,23 @@ function brancherInterface() {
     seg[prefs.niveau].focus();
   });
 
+  const segB = document.querySelectorAll('.segment [data-boules]');
+  const majBoules = () => segB.forEach((b) => b.setAttribute('aria-checked', String(Number(b.dataset.boules) === prefs.boules)));
+  majBoules();
+  segB.forEach((b) => b.addEventListener('click', () => {
+    prefs.boules = Number(b.dataset.boules);
+    ecrire(STOCKAGE.boules, String(prefs.boules));
+    majBoules();
+  }));
+  document.querySelector('.segment--boules').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const i = BOULES_CHOIX.indexOf(prefs.boules);
+    prefs.boules = BOULES_CHOIX[(i + (e.key === 'ArrowRight' ? 1 : BOULES_CHOIX.length - 1)) % BOULES_CHOIX.length];
+    ecrire(STOCKAGE.boules, String(prefs.boules));
+    majBoules();
+    segB[BOULES_CHOIX.indexOf(prefs.boules)].focus();
+  });
+
   $('btn-solo').addEventListener('click', demarrerSolo);
 
   const enLigne = enLigneDisponible();
@@ -462,7 +482,7 @@ async function demarrer() {
 }
 
 // Accroche d'inspection pour les tests manuels (lecture seule de la session courante).
-Object.defineProperty(window, 'BALOTE', { value: Object.freeze({ get session() { return session; } }) });
+Object.defineProperty(window, 'BALOTE', { value: Object.freeze({ get session() { return session; }, get rendu() { return rendu; } }) });
 
 $('btn-reessayer').addEventListener('click', demarrer);
 brancherInterface();

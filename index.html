@@ -52,6 +52,11 @@
             <button type="button" role="radio" aria-checked="true" data-niveau="1">Club</button>
             <button type="button" role="radio" aria-checked="false" data-niveau="2">Maître</button>
           </div>
+          <div class="segment segment--boules" role="radiogroup" aria-label="Boules par joueur (solo)">
+            <button type="button" role="radio" aria-checked="false" data-boules="2">2 boules</button>
+            <button type="button" role="radio" aria-checked="true" data-boules="3">3 boules</button>
+            <button type="button" role="radio" aria-checked="false" data-boules="4">4 boules</button>
+          </div>
           <button type="button" class="btn btn--plein" id="btn-solo">Jouer contre le club</button>
           <div class="rangee">
             <button type="button" class="btn" id="btn-creer">Créer un duel</button>
@@ -110,13 +115,13 @@
         <header class="hud">
           <div class="chip chip--rouge">
             <img id="hud-avatar-0" src="assets/avatars/01.webp" width="32" height="32" alt="">
-            <div class="chip-txt"><span id="hud-nom-0" class="chip-nom">Vous</span><span class="chip-boules" id="hud-boules-0" aria-label="Boules restantes">4</span></div>
+            <div class="chip-txt"><span id="hud-nom-0" class="chip-nom">Vous</span><span class="chip-boules" id="hud-boules-0" aria-label="Boules restantes">3</span></div>
             <strong id="hud-score-0" class="chip-score">0</strong>
           </div>
           <p class="hud-manche" id="hud-manche">Mène 1</p>
           <div class="chip chip--bleu">
             <strong id="hud-score-1" class="chip-score">0</strong>
-            <div class="chip-txt"><span id="hud-nom-1" class="chip-nom">Club</span><span class="chip-boules" id="hud-boules-1" aria-label="Boules restantes">4</span></div>
+            <div class="chip-txt"><span id="hud-nom-1" class="chip-nom">Club</span><span class="chip-boules" id="hud-boules-1" aria-label="Boules restantes">3</span></div>
             <img id="hud-avatar-1" src="assets/avatars/02.webp" width="32" height="32" alt="">
           </div>
         </header>
