@@ -4,7 +4,7 @@ import { AVATARS } from '../config.js';
 
 export const PSEUDO_MIN = 3;
 export const PSEUDO_MAX = 14;
-export const MDP_MIN = 6;
+export const MDP_MIN = 8;
 export const AVATAR_MAX = 20000;   // caractères d'une photo encodée
 
 const INTERDITS = /(merde|pute|connard|connasse|salope|encule|nique|fdp|batard|nazi|hitler|fuck|shit|bitch|cunt|nigg|dick|pussy|asshole|whore|porn)/;

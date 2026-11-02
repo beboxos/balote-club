@@ -32,23 +32,24 @@ for (const exotique of ['Øystein', 'Straße', 'Þórr', 'Æsir']) assert.equal(
 
 // Réservation
 assert.equal((await A.rpc('bal_reserver', { p_pseudo: pseudo, p_mdp: 'abc' })).data.error, 'mdp');
-assert.equal((await A.rpc('bal_reserver', { p_pseudo: pseudo, p_mdp: 'secret1', p_avatar: 'x' })).data.error, 'avatar');
-const r1 = (await A.rpc('bal_reserver', { p_pseudo: pseudo, p_mdp: 'secret1', p_avatar: '02' })).data;
+assert.equal((await A.rpc('bal_reserver', { p_pseudo: pseudo, p_mdp: 'secret123', p_avatar: 'x' })).data.error, 'avatar');
+const r1 = (await A.rpc('bal_reserver', { p_pseudo: pseudo, p_mdp: 'secret123', p_avatar: '02' })).data;
 assert.deepEqual(r1, { ok: true, pseudo, avatar: '02' });
 assert.equal((await A.rpc('bal_pseudo_statut', { p_pseudo: pseudo })).data, 'a_moi');
 assert.equal((await B.rpc('bal_pseudo_statut', { p_pseudo: pseudo.toLowerCase() })).data, 'reserve');
 assert.equal((await B.rpc('bal_pseudo_statut', { p_pseudo: autre })).data, 'reserve', 'sosie par squelette');
-assert.equal((await B.rpc('bal_reserver', { p_pseudo: pseudo, p_mdp: 'secret1' })).data.error, 'pris');
-assert.equal((await B.rpc('bal_reserver', { p_pseudo: autre, p_mdp: 'secret1' })).data.error, 'pris', 'sosie refusé');
+assert.equal((await B.rpc('bal_reserver', { p_pseudo: pseudo, p_mdp: 'secret123' })).data.error, 'pris');
+assert.equal((await B.rpc('bal_reserver', { p_pseudo: autre, p_mdp: 'secret123' })).data.error, 'pris', 'sosie refusé');
 
 // 1 lu l, 0 lu o : « zz1ab… » et « zzlab… » sont le même pseudo
 const n5 = String(Math.floor(Math.random() * 1e5)).padStart(5, '2');
 const chiffre = 'zz1ab' + n5;
-assert.equal((await A.rpc('bal_reserver', { p_pseudo: chiffre, p_mdp: 'secret1' })).data.ok, true);
+assert.equal((await A.rpc('bal_reserver', { p_pseudo: chiffre, p_mdp: 'secret123' })).data.ok, true);
 assert.equal((await B.rpc('bal_pseudo_statut', { p_pseudo: 'zzlab' + n5 })).data, 'reserve', 'sosie chiffre');
-assert.equal((await B.rpc('bal_reserver', { p_pseudo: 'zzlab' + n5, p_mdp: 'secret1' })).data.error, 'pris');
+assert.equal((await B.rpc('bal_pseudo_statut', { p_pseudo: 'zziab' + n5 })).data, 'reserve', 'sosie i/l');
+assert.equal((await B.rpc('bal_reserver', { p_pseudo: 'zzlab' + n5, p_mdp: 'secret123' })).data.error, 'pris');
 assert.equal((await A.rpc('bal_pseudo_statut', { p_pseudo: pseudo })).data, 'reserve', 'A est maintenant lié au second profil');
-await A.rpc('bal_connecter', { p_pseudo: pseudo, p_mdp: 'secret1' });   // A revient sur le premier
+await A.rpc('bal_connecter', { p_pseudo: pseudo, p_mdp: 'secret123' });   // A revient sur le premier
 
 // Profil et vérification
 assert.deepEqual((await A.rpc('bal_mon_profil')).data, { pseudo, avatar: '02' });
@@ -59,8 +60,8 @@ assert.equal((await A.rpc('bal_profil_de', { p_uid: B.uid })).data, null);
 // Connexion : mauvais mots de passe, blocage par appareil
 assert.equal((await B.rpc('bal_connecter', { p_pseudo: 'inconnu' + pseudo, p_mdp: 'x' })).data.error, 'inconnu');
 for (let i = 0; i < 5; i++) assert.equal((await B.rpc('bal_connecter', { p_pseudo: pseudo, p_mdp: 'faux' + i })).data.error, 'mdp');
-assert.equal((await B.rpc('bal_connecter', { p_pseudo: pseudo, p_mdp: 'secret1' })).data.error, 'bloque', 'B bloqué même avec le bon mot de passe');
-const c = (await C.rpc('bal_connecter', { p_pseudo: pseudo, p_mdp: 'secret1' })).data;
+assert.equal((await B.rpc('bal_connecter', { p_pseudo: pseudo, p_mdp: 'secret123' })).data.error, 'bloque', 'B bloqué même avec le bon mot de passe');
+const c = (await C.rpc('bal_connecter', { p_pseudo: pseudo, p_mdp: 'secret123' })).data;
 assert.deepEqual(c, { ok: true, pseudo, avatar: '02' }, 'C n\'est pas bloqué par les échecs de B');
 assert.equal((await A.rpc('bal_connecter', { p_pseudo: pseudo, p_mdp: 'nimportequoi' })).data.ok, true, 'appareil lié jamais bloqué');
 

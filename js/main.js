@@ -71,7 +71,7 @@ const boutonsAvatars = new Map();   // id de portrait → bouton de la grille
 const ERREURS_COMPTE = {
   pris: "Ce pseudo vient d'être pris. Choisissez-en un autre.",
   invalide: 'Pseudo de 3 à 14 caractères : lettres, chiffres, espace, _ . -',
-  mdp: 'Mot de passe : 6 caractères minimum.',
+  mdp: 'Mot de passe : 8 caractères minimum.',
   limite: 'Trop de pseudos réservés depuis cet appareil.',
   avatar: 'Portrait refusé, choisissez-en un autre.',
   inconnu: 'Aucun pseudo réservé de ce nom.',

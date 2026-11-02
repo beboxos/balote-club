@@ -20,8 +20,8 @@ create table if not exists public.bal_profils (
 alter table public.bal_profils drop column if exists echecs_h, drop column if exists fenetre_h;
 alter table public.bal_profils drop column if exists essais, drop column if exists bloque_jusqu;
 
--- Squelette d'un pseudo : minuscules, sans accents, sans espaces ni _ . - , 0 lu o et 1 lu l. Deux pseudos
--- au même squelette (« Léa », « l.e.a », « LEA », « Lé1a » et « Léla ») sont le même pseudo : pas de sosies.
+-- Squelette d'un pseudo : minuscules, sans accents, sans espaces ni _ . - , 0 lu o, 1 et i lus l. Deux pseudos
+-- au même squelette (« Léa », « l.e.a », « LEA », « Lé1a », « Léia » et « Léla ») sont le même pseudo : pas de sosies.
 -- Il couvre exactement les caractères que bal_pseudo_valide autorise. Index recréé pour recalculer.
 drop index if exists public.bal_profils_squelette;
 create or replace function public.bal_squelette(p text)
@@ -31,7 +31,7 @@ returns text language sql immutable as $$
       lower(translate(btrim(p), 'ÀÁÂÃÄÅàáâãäåÈÉÊËèéêëÌÍÎÏìíîïÒÓÔÕÖòóôõöÙÚÛÜùúûüÇçÑñ',
                                 'AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCcNn')),
       '[ _.-]', '', 'g'),
-    '01', 'ol');
+    '01i', 'oll');
 $$;
 create unique index if not exists bal_profils_squelette on public.bal_profils (public.bal_squelette(pseudo));
 
@@ -98,7 +98,7 @@ declare v_id uuid;
 begin
   if auth.uid() is null then raise exception 'Authentification requise'; end if;
   if not public.bal_pseudo_valide(p_pseudo) then return json_build_object('ok', false, 'error', 'invalide'); end if;
-  if p_mdp is null or char_length(p_mdp) < 6 or char_length(p_mdp) > 64 then
+  if p_mdp is null or char_length(p_mdp) < 8 or char_length(p_mdp) > 64 then
     return json_build_object('ok', false, 'error', 'mdp');
   end if;
   if not public.bal_avatar_valide(p_avatar) then return json_build_object('ok', false, 'error', 'avatar'); end if;
