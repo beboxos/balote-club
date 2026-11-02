@@ -27,6 +27,9 @@ assert.equal((await A.rpc('bal_pseudo_statut', { p_pseudo: 'ab' })).data, 'inval
 assert.equal((await A.rpc('bal_pseudo_statut', { p_pseudo: 'Лeа12' })).data, 'invalide');
 assert.equal((await A.rpc('bal_pseudo_statut', { p_pseudo: pseudo })).data, 'libre');
 
+// Alphabet : lettres que le squelette sait normaliser seulement
+for (const exotique of ['Øystein', 'Straße', 'Þórr', 'Æsir']) assert.equal((await A.rpc('bal_pseudo_statut', { p_pseudo: exotique })).data, 'invalide', exotique);
+
 // Réservation
 assert.equal((await A.rpc('bal_reserver', { p_pseudo: pseudo, p_mdp: 'abc' })).data.error, 'mdp');
 assert.equal((await A.rpc('bal_reserver', { p_pseudo: pseudo, p_mdp: 'secret1', p_avatar: 'x' })).data.error, 'avatar');
@@ -37,6 +40,15 @@ assert.equal((await B.rpc('bal_pseudo_statut', { p_pseudo: pseudo.toLowerCase() 
 assert.equal((await B.rpc('bal_pseudo_statut', { p_pseudo: autre })).data, 'reserve', 'sosie par squelette');
 assert.equal((await B.rpc('bal_reserver', { p_pseudo: pseudo, p_mdp: 'secret1' })).data.error, 'pris');
 assert.equal((await B.rpc('bal_reserver', { p_pseudo: autre, p_mdp: 'secret1' })).data.error, 'pris', 'sosie refusé');
+
+// 1 lu l, 0 lu o : « zz1ab… » et « zzlab… » sont le même pseudo
+const n5 = String(Math.floor(Math.random() * 1e5)).padStart(5, '2');
+const chiffre = 'zz1ab' + n5;
+assert.equal((await A.rpc('bal_reserver', { p_pseudo: chiffre, p_mdp: 'secret1' })).data.ok, true);
+assert.equal((await B.rpc('bal_pseudo_statut', { p_pseudo: 'zzlab' + n5 })).data, 'reserve', 'sosie chiffre');
+assert.equal((await B.rpc('bal_reserver', { p_pseudo: 'zzlab' + n5, p_mdp: 'secret1' })).data.error, 'pris');
+assert.equal((await A.rpc('bal_pseudo_statut', { p_pseudo: pseudo })).data, 'reserve', 'A est maintenant lié au second profil');
+await A.rpc('bal_connecter', { p_pseudo: pseudo, p_mdp: 'secret1' });   // A revient sur le premier
 
 // Profil et vérification
 assert.deepEqual((await A.rpc('bal_mon_profil')).data, { pseudo, avatar: '02' });

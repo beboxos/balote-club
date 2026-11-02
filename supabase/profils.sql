@@ -14,19 +14,24 @@ create table if not exists public.bal_profils (
   secret_hash  text not null,
   avatar       text check (avatar is null or char_length(avatar) <= 20000),
   cree_par     uuid,
-  cree_le      timestamptz not null default now(),
-  echecs_h     int not null default 0,        -- mots de passe faux dans la fenêtre d'une heure
-  fenetre_h    timestamptz not null default now()
+  cree_le      timestamptz not null default now()
 );
+-- Anciennes colonnes d'un plafond global d'échecs, retiré (n'importe qui pouvait le déclencher).
+alter table public.bal_profils drop column if exists echecs_h, drop column if exists fenetre_h;
+alter table public.bal_profils drop column if exists essais, drop column if exists bloque_jusqu;
 
--- Squelette d'un pseudo : minuscules, sans accents, sans espaces ni _ . - . Deux pseudos au même
--- squelette (« Léa », « l.e.a », « LEA ») sont le même pseudo : pas de sosies.
+-- Squelette d'un pseudo : minuscules, sans accents, sans espaces ni _ . - , 0 lu o et 1 lu l. Deux pseudos
+-- au même squelette (« Léa », « l.e.a », « LEA », « Lé1a » et « Léla ») sont le même pseudo : pas de sosies.
+-- Il couvre exactement les caractères que bal_pseudo_valide autorise. Index recréé pour recalculer.
+drop index if exists public.bal_profils_squelette;
 create or replace function public.bal_squelette(p text)
 returns text language sql immutable as $$
-  select regexp_replace(
-    lower(translate(btrim(p), 'ÀÁÂÃÄÅàáâãäåÈÉÊËèéêëÌÍÎÏìíîïÒÓÔÕÖòóôõöÙÚÛÜùúûüÇçÑñ',
-                              'AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCcNn')),
-    '[ _.-]', '', 'g');
+  select translate(
+    regexp_replace(
+      lower(translate(btrim(p), 'ÀÁÂÃÄÅàáâãäåÈÉÊËèéêëÌÍÎÏìíîïÒÓÔÕÖòóôõöÙÚÛÜùúûüÇçÑñ',
+                                'AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCcNn')),
+      '[ _.-]', '', 'g'),
+    '01', 'ol');
 $$;
 create unique index if not exists bal_profils_squelette on public.bal_profils (public.bal_squelette(pseudo));
 
@@ -58,7 +63,7 @@ create or replace function public.bal_pseudo_valide(p text)
 returns boolean language sql immutable as $$
   select p is not null
      and char_length(btrim(p)) between 3 and 14
-     and btrim(p) ~ '^[A-Za-z0-9À-ÖØ-öø-ÿ _.-]+$'
+     and btrim(p) ~ '^[A-Za-z0-9ÀÁÂÃÄÅàáâãäåÈÉÊËèéêëÌÍÎÏìíîïÒÓÔÕÖòóôõöÙÚÛÜùúûüÇçÑñ _.-]+$'
      and lower(translate(btrim(p), 'ÀÁÂÃÄÅàáâãäåÈÉÊËèéêëÌÍÎÏìíîïÒÓÔÕÖòóôõöÙÚÛÜùúûüÇçÑñ',
                                    'AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCcNn'))
          !~ '(merde|pute|connard|connasse|salope|encule|nique|fdp|batard|nazi|hitler|fuck|shit|bitch|cunt|nigg|dick|pussy|asshole|whore|porn)';
@@ -97,11 +102,11 @@ begin
     return json_build_object('ok', false, 'error', 'mdp');
   end if;
   if not public.bal_avatar_valide(p_avatar) then return json_build_object('ok', false, 'error', 'avatar'); end if;
-  -- Limites anti-squat : 3 pseudos par identité d'appareil et 30 réservations par heure pour tout le
-  -- jeu. Une identité anonyme se recrée librement : la vraie barrière est la limite d'inscriptions
-  -- anonymes de Supabase (par IP) et, si besoin, un captcha (Authentication > Attack Protection).
-  if (select count(*) from public.bal_profils where cree_par = auth.uid()) >= 3
-     or (select count(*) from public.bal_profils where cree_le > now() - interval '1 hour') >= 30 then
+  -- Limite anti-squat : 3 pseudos par identité d'appareil. Pas de plafond global : n'importe qui
+  -- pourrait l'atteindre pour empêcher les autres de réserver. Une identité anonyme se recrée
+  -- librement : la vraie barrière est la limite d'inscriptions anonymes de Supabase (par IP) et, si
+  -- besoin, un captcha (Authentication > Attack Protection).
+  if (select count(*) from public.bal_profils where cree_par = auth.uid()) >= 3 then
     return json_build_object('ok', false, 'error', 'limite');
   end if;
   insert into public.bal_profils (pseudo, secret_hash, avatar, cree_par)
@@ -115,8 +120,9 @@ exception when unique_violation then
 end $$;
 
 -- Retrouver son pseudo sur un autre appareil. Blocage par appareil : 5 mots de passe faux = 15 minutes
--- pour cet appareil seulement. Un appareil déjà lié au profil n'est jamais bloqué. Plafond global de
--- 40 échecs par heure et par pseudo contre les attaques à identités multiples.
+-- pour cet appareil seulement ; personne d'autre ne peut verrouiller le propriétaire. Un appareil déjà
+-- lié au profil n'est jamais bloqué. Les essais depuis des identités anonymes multiples sont freinés
+-- par la limite d'inscriptions anonymes de Supabase (par IP) et le coût de bcrypt.
 create or replace function public.bal_connecter(p_pseudo text, p_mdp text)
 returns json language plpgsql security definer set search_path = public, extensions as $$
 declare
@@ -131,16 +137,11 @@ begin
   if exists (select 1 from public.bal_liens where uid = auth.uid() and profil_id = v.id) then
     return json_build_object('ok', true, 'pseudo', v.pseudo, 'avatar', v.avatar);
   end if;
-  if v.fenetre_h < now() - interval '1 hour' then
-    update public.bal_profils set echecs_h = 0, fenetre_h = now() where id = v.id;
-    v.echecs_h := 0;
-  end if;
   select * into e from public.bal_echecs where profil_id = v.id and uid = auth.uid();
-  if (e.bloque_jusqu is not null and e.bloque_jusqu > now()) or v.echecs_h >= 40 then
+  if e.bloque_jusqu is not null and e.bloque_jusqu > now() then
     return json_build_object('ok', false, 'error', 'bloque');
   end if;
   if p_mdp is null or v.secret_hash <> crypt(p_mdp, v.secret_hash) then
-    update public.bal_profils set echecs_h = echecs_h + 1 where id = v.id;
     insert into public.bal_echecs (profil_id, uid, essais) values (v.id, auth.uid(), 1)
     on conflict (profil_id, uid) do update
       set essais = case when public.bal_echecs.essais + 1 >= 5 then 0 else public.bal_echecs.essais + 1 end,

@@ -13,7 +13,7 @@ const PHOTO = /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/;
 export function pseudoValide(p) {
   const s = String(p ?? '').trim();
   if (s.length < PSEUDO_MIN || s.length > PSEUDO_MAX) return false;
-  if (!/^[A-Za-z0-9À-ÖØ-öø-ÿ _.-]+$/.test(s)) return false;
+  if (!/^[A-Za-z0-9ÀÁÂÃÄÅàáâãäåÈÉÊËèéêëÌÍÎÏìíîïÒÓÔÕÖòóôõöÙÚÛÜùúûüÇçÑñ _.-]+$/.test(s)) return false;
   const nu = s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   return !INTERDITS.test(nu);
 }
