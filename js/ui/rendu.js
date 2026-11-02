@@ -1,7 +1,7 @@
 import { TERRAIN, LANCER, RAYON, PORTEE_AIR, sinCos, distance, puissanceCochonnet } from '../core/physique.js';
 import { meilleures } from '../core/partie.js';
-import { dessinerTerrain, spriteBoule, Effets, viderCaches } from './matieres.js';
-import { Camera, peindreDecor, ombreSol, anneauSol, cochonnet, trajectoire, jauge, GROSSISSEMENT } from './vue3d.js';
+import { dessinerTerrain, spriteBoule, Effets, viderCaches, HALO } from './matieres.js';
+import { Camera, peindreDecor, ombreSol, haloSol, anneauSol, cochonnet, trajectoire, jauge, GROSSISSEMENT } from './vue3d.js';
 import { dessinerPerso, positionRepos, poste } from './perso.js';
 
 const DRAG_MAX = 150;     // unités du terrain pour la puissance pleine
@@ -302,6 +302,7 @@ export class Rendu {
     ordre.sort((a, b) => objets[a].y - objets[b].y);
     for (const i of ordre) {
       const o = objets[i];
+      if (i > 0) haloSol(ctx, cam, o.x, o.y, o.r * 1.9, HALO[o.equipe], 0.5);
       ombreSol(ctx, cam, o.x, o.y, o.r * (i === 0 ? 1.1 : 1), i === 0 ? 0.32 : 0.42);
     }
     for (const i of ordre) {

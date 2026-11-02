@@ -357,6 +357,20 @@ export function ombreSol(ctx, cam, x, y, rayon, alpha = 0.4, hauteur = 0) {
   });
 }
 
+// Halo coloré posé au sol sous une boule : repère d'équipe lisible de loin. couleur = 'r,g,b'.
+export function haloSol(ctx, cam, x, y, rayon, couleur, alpha = 0.5) {
+  surSol(ctx, cam, x, y, 1, () => {
+    const g = ctx.createRadialGradient(0, 0, rayon * 0.35, 0, 0, rayon);
+    g.addColorStop(0, `rgba(${couleur},0)`);
+    g.addColorStop(0.55, `rgba(${couleur},${alpha})`);
+    g.addColorStop(1, `rgba(${couleur},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, rayon, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
 // Anneau posé au sol (fin de mène, point de chute, jauge).
 export function anneauSol(ctx, cam, x, y, rayon, couleur, epaisseurPx, debut = 0, fin = Math.PI * 2) {
   surSol(ctx, cam, x, y, 1, () => {

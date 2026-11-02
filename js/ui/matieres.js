@@ -8,6 +8,9 @@ export const TEINTES = {
   1: ['#9db4cc', '#3f6082', '#1f3348'],
 };
 const LISERE = { 0: 'rgba(224,122,79,.5)', 1: 'rgba(143,176,212,.5)' };
+// Boules d'acier ; l'équipe se lit à la bande gravée peinte et au halo posé au sol.
+const ACIER = ['#f3f6f8', '#a2abb3', '#3a4047'];
+export const HALO = { 0: '224,98,52', 1: '84,140,214' };
 
 function canvasHorsEcran(l, h) {
   const c = document.createElement('canvas');
@@ -162,9 +165,9 @@ export function spriteBoule(equipe, index, r, echelle) {
   g.scale(echelle, echelle);
   const x = r + pad;
   const y = r + pad;
-  const [clair, moyen, sombre] = TEINTES[equipe];
+  const [clair, moyen, sombre] = ACIER;
 
-  // Corps
+  // Corps : acier brossé, lumière haut-gauche
   const corps = g.createRadialGradient(x - r * 0.35, y - r * 0.4, 0, x - r * 0.35, y - r * 0.4, r * 1.6);
   corps.addColorStop(0, clair);
   corps.addColorStop(0.45, moyen);
@@ -174,6 +177,31 @@ export function spriteBoule(equipe, index, r, echelle) {
   g.arc(x, y, r, 0, Math.PI * 2);
   g.fill();
 
+  // Reflet du ciel en haut, du sol sombre en bas : l'effet chromé.
+  g.save();
+  g.beginPath();
+  g.arc(x, y, r, 0, Math.PI * 2);
+  g.clip();
+  const ciel = g.createLinearGradient(0, y - r, 0, y + r);
+  ciel.addColorStop(0, 'rgba(255,255,255,.2)');
+  ciel.addColorStop(0.46, 'rgba(255,255,255,0)');
+  ciel.addColorStop(0.54, 'rgba(20,24,28,.18)');
+  ciel.addColorStop(1, 'rgba(20,24,28,.38)');
+  g.fillStyle = ciel;
+  g.fillRect(x - r, y - r, r * 2, r * 2);
+  // Bande d'équipe gravée : deux filets sombres encadrent un anneau de la couleur de l'équipe.
+  const teinte = TEINTES[equipe];
+  g.lineWidth = r * 0.24;
+  g.strokeStyle = 'rgba(15,18,22,.4)';
+  g.beginPath(); g.ellipse(x, y, r * 1.02, r * 0.42, -0.4, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = r * 0.15;
+  g.strokeStyle = teinte[1];
+  g.beginPath(); g.ellipse(x, y, r * 1.02, r * 0.42, -0.4, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = r * 0.05;
+  g.strokeStyle = teinte[0];
+  g.beginPath(); g.ellipse(x, y, r * 1.02, r * 0.42 - r * 0.06, -0.4, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+  g.restore();
+
   // Usure : 2 à 3 taches, positions seedées par l'index (visuel seulement)
   g.save();
   g.beginPath();
@@ -181,7 +209,7 @@ export function spriteBoule(equipe, index, r, echelle) {
   g.clip();
   const rng = mulberry32(index * 7919 + equipe * 104729 + 1);
   const n = 2 + Math.floor(rng() * 2);
-  g.fillStyle = 'rgba(20,10,6,.28)';
+  g.fillStyle = 'rgba(20,24,30,.2)';
   for (let i = 0; i < n; i++) {
     const a = rng() * Math.PI * 2;
     const d = rng() * r * 0.7;

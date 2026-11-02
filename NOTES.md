@@ -87,7 +87,7 @@ La référence de `tests/determinisme.html` change avec la nouvelle physique : v
 
 - **Atlas Gemini** : une planche de 16 accessoires (platane, peuplier, olivier, fruitier, buissons, haie, lavande, banc, tables, fontaine, lampadaire, caisse de boules, muret, géraniums) générée dans Gemini (prompt dans `atlas/PROMPT_DECOR_GEMINI.md`, source `atlas/decor1.jpeg`), détourée et réduite par `python tools/slice_decor.py build` en `assets/decor/decor.webp` (220 Ko) + `js/ui/decor-atlas.js`.
 - **Rendu** : `sprites()` dans `vue3d.js` pose les sprites au sol (ancrés par leur pied, taille en unités du terrain, triés du fond vers l'avant, petite ombre) hors des haies, plus lampadaires, jardinières et pots dans la bande d'herbe ; l'emplacement suit la longueur du terrain (`DECOR_PLAN`). Le décor est repeint une fois l'atlas chargé (`Rendu.rafraichirDecor`) ; sans atlas, les anciens arbres dessinés en code reviennent.
-- À faire ensuite (idée du joueur) : boules d'acier réalistes, les deux équipes distinguées par un repère de couleur (anneau gravé) ou un halo de la couleur de l'équipe, au lieu de boules rouges et bleues.
+- **Boules d'acier** (idée du joueur) : `spriteBoule` dessine un corps chromé (reflet du ciel en haut, sol sombre en bas, spéculaire) ; l'équipe se lit à une fine bande gravée (orange / bleu, deux filets sombres autour) et à un halo coloré posé au sol sous chaque boule (`haloSol` dans `vue3d.js`, couleurs `HALO` dans `matieres.js`). À juger au jeu : si le repère manque de lisibilité de loin, augmenter l'alpha du halo (0,5 dans `rendu.js`).
 
 ## Vérifié
 
