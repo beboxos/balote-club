@@ -60,8 +60,13 @@ La référence de `tests/determinisme.html` change avec la nouvelle physique : v
 - **Cailloux** : semés à chaque mène depuis la graine (`semerCailloux`) : 0 sur lisse, 5 sur terre, 12 sur gravier. Un objet qui roule sur un caillou est dévié de 3 à 9° du côté opposé, freiné de 5 %, une seule fois par caillou et par déplacement. Même résultat sur les deux appareils (arithmétique simple, masque de bits dans `o.cai`).
 - **Cochonnet** : le premier joueur de chaque mène le lance (c'est un coup du journal, `phase === 'cochonnet'`), puis lance aussi la première boule. Le geste 0..1 est étalé sur 330 à 450 unités : ni trop près, ni trop loin, l'angle restant libre. Sorti du terrain, il est relancé, et posé d'office après deux lancers nuls.
 - **Taille du cochonnet** : rendu réduit de 30 % (facteur 2,2 → 1,54). Le rayon physique ne change pas.
-- Le portée n'est plus une constante : `portee(sol)`. Empreinte de référence recalculée : `0f4af409`, 5–3 à la mène 6.
+- Le portée n'est plus une constante : `portee(sol)`. Empreinte de référence recalculée : `b2d3e572`, 1–5 à la mène 5.
 - Non vérifié : ressenti réel du roulement et des cailloux au toucher, équilibrage du bot sur les nouveaux sols, duel entre deux navigateurs avec le lancer du cochonnet.
+
+### Ajustements suivants
+
+- **Cailloux plus marqués** : déviation de 8 à 18° (avant 3 à 9°), perte de vitesse 10 %, zone de contact élargie, 7 cailloux sur Terre.
+- **Points pour gagner** : 5 ou 13 au menu (solo et deux joueurs), `BUTS_CHOIX` dans `partie.js`. Le duel en ligne reste à 5. Empreinte de référence : `b2d3e572`.
 
 ## Vérifié
 

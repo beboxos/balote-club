@@ -19,7 +19,7 @@ export const PORTEE_AIR = V_LANCER * T_VOL;
 // conservée à l'atterrissage ; cailloux : nombre de petits cailloux semés à chaque mène.
 export const SOLS = {
   lisse: { id: 'lisse', nom: 'Lisse', frottement: 260, impact: 0.5, cailloux: 0 },
-  terre: { id: 'terre', nom: 'Terre', frottement: 260, impact: 0.5, cailloux: 5 },
+  terre: { id: 'terre', nom: 'Terre', frottement: 260, impact: 0.5, cailloux: 7 },
   gravier: { id: 'gravier', nom: 'Gravier', frottement: 380, impact: 0.45, cailloux: 12 },
 };
 export const SOL_DEFAUT = 'terre';
@@ -44,8 +44,8 @@ export const LANCER = { x: 180, y: 566 };
 const RESTITUTION = 0.92;
 const MASSE_BOULE = 1;
 const MASSE_JACK = 0.25;
-const MARGE_CAILLOU = 0.45;   // part du rayon de l'objet pour qu'un caillou le touche
-const PERTE_CAILLOU = 0.95;   // vitesse conservée après un caillou
+const MARGE_CAILLOU = 0.6;    // part du rayon de l'objet pour qu'un caillou le touche
+const PERTE_CAILLOU = 0.9;    // vitesse conservée après un caillou
 const PI = 3.141592653589793;
 
 // Table sinus 720 entrées (pas de 0,5°) calculée par série de Taylor sur [0, π/2]

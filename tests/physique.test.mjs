@@ -107,4 +107,7 @@ const r1 = executerReference();
 const r2 = executerReference();
 assert.deepEqual(r1, r2);
 console.log('référence :', JSON.stringify(r1), '| écart trigo', ecart.toExponential(2));
+assert.equal(new Moteur(1, 3, 'terre', 13).but, 13);
+const long = rejouer(123456789, Array.from({ length: 200 }, (_, i) => ({ seq: i, angle: 27000, puissance: 0.6 })), 3, 'terre', 13);
+assert.ok(long.fini ? Math.max(...long.scores) >= 13 : Math.max(...long.scores) < 13, 'partie à 13 points');
 console.log('OK');

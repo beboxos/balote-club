@@ -1,5 +1,5 @@
 import { AVATARS, STOCKAGE } from './config.js';
-import { Partie, BOULES_DEFAUT, BOULES_CHOIX } from './core/partie.js';
+import { Partie, BOULES_DEFAUT, BOULES_CHOIX, BUT, BUTS_CHOIX } from './core/partie.js';
 import { SOLS, SOL_DEFAUT } from './core/physique.js';
 import { jouerBot, NIVEAUX } from './core/bot.js';
 import { mulberry32 } from './core/rng.js';
@@ -22,6 +22,7 @@ const prefs = {
   avatar: AVATARS.includes(lire(STOCKAGE.avatar, '01')) ? lire(STOCKAGE.avatar, '01') : '01',
   niveau: Math.min(2, Math.max(0, Number(lire(STOCKAGE.niveau, '1')) || 0)),
   boules: BOULES_CHOIX.includes(Number(lire(STOCKAGE.boules, ''))) ? Number(lire(STOCKAGE.boules, '')) : BOULES_DEFAUT,
+  but: BUTS_CHOIX.includes(Number(lire(STOCKAGE.but, ''))) ? Number(lire(STOCKAGE.but, '')) : BUT,
   sol: SOLS[lire(STOCKAGE.sol, '')] ? lire(STOCKAGE.sol, '') : SOL_DEFAUT,
 };
 const IDS_SOLS = Object.keys(SOLS);
@@ -70,7 +71,7 @@ function creerPartie(s, graine, cote, reseau) {
     ? (uid) => (uid === ligne.hote ? 0 : uid === ligne.invite ? 1 : -1)
     : null;
   const partie = new Partie({
-    graine, cote, reseau, equipeAuteur, boules: s.boules, sol: s.sol, local: !!s.local,
+    graine, cote, reseau, equipeAuteur, boules: s.boules, sol: s.sol, but: s.but, local: !!s.local,
     avantLancer: ({ equipe, coup }) => rendu.lancerGeste(equipe, coup.puissance),
     onCoup: () => {
       audio.jouer('lancer', { volume: 0.8 });
@@ -147,6 +148,7 @@ function demarrerSolo() {
     niveau: prefs.niveau,
     boules: prefs.boules,
     sol: prefs.sol,
+    but: prefs.but,
     rng: mulberry32(graine ^ 0x5eed),
     noms: [nomJoueur(), 'Le club'],
     avatars: [prefs.avatar, avatarBot],
@@ -165,6 +167,7 @@ function demarrerLocal() {
     local: true,
     boules: prefs.boules,
     sol: prefs.sol,
+    but: prefs.but,
     vu: 0,   // équipe qui tient le téléphone
     noms: [prefs.pseudo.trim() || 'Joueur 1', 'Joueur 2'],
     avatars: [prefs.avatar, prefs.avatar === '02' ? '03' : '02'],
@@ -419,6 +422,22 @@ function brancherInterface() {
     ecrire(STOCKAGE.boules, String(prefs.boules));
     majBoules();
     segB[BOULES_CHOIX.indexOf(prefs.boules)].focus();
+  });
+
+  const segBut = document.querySelectorAll('.segment [data-but]');
+  const majBut = () => segBut.forEach((b) => b.setAttribute('aria-checked', String(Number(b.dataset.but) === prefs.but)));
+  majBut();
+  segBut.forEach((b) => b.addEventListener('click', () => {
+    prefs.but = Number(b.dataset.but);
+    ecrire(STOCKAGE.but, String(prefs.but));
+    majBut();
+  }));
+  document.querySelector('.segment--but').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    prefs.but = BUTS_CHOIX[(BUTS_CHOIX.indexOf(prefs.but) + 1) % BUTS_CHOIX.length];
+    ecrire(STOCKAGE.but, String(prefs.but));
+    majBut();
+    segBut[BUTS_CHOIX.indexOf(prefs.but)].focus();
   });
 
   const segS = document.querySelectorAll('.segment [data-sol]');
