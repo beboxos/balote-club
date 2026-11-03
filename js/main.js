@@ -325,7 +325,8 @@ function majUrl(code) {
 // Réglages de terrain d'un duel : ceux de l'hôte font foi (sinon les deux moteurs divergeraient).
 // L'hôte les annonce avec son profil ; ils sont gardés par salon pour survivre à un rechargement.
 function reglagesValides(r) {
-  return !!r && !!SOLS[r.sol] && !!LONGUEURS[r.longueur]
+  return !!r && typeof r.sol === 'string' && Object.hasOwn(SOLS, r.sol)
+    && typeof r.longueur === 'string' && Object.hasOwn(LONGUEURS, r.longueur)
     && Number.isInteger(r.cailloux) && r.cailloux >= 0 && r.cailloux <= 100;
 }
 
