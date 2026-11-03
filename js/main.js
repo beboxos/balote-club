@@ -322,9 +322,42 @@ function majUrl(code) {
   history.replaceState(null, '', url);
 }
 
-function profil(cote) { return { pseudo: nomJoueur(), avatar: prefs.avatar, cote }; }
+// Réglages de terrain d'un duel : ceux de l'hôte font foi (sinon les deux moteurs divergeraient).
+// L'hôte les annonce avec son profil ; ils sont gardés par salon pour survivre à un rechargement.
+function reglagesValides(r) {
+  return !!r && !!SOLS[r.sol] && !!LONGUEURS[r.longueur]
+    && Number.isInteger(r.cailloux) && r.cailloux >= 0 && r.cailloux <= 100;
+}
+
+function cleReglages(code) { return `balote.reglages.${code}`; }
+
+function reglagesGardes(code) {
+  try {
+    const r = JSON.parse(localStorage.getItem(cleReglages(code)));
+    return reglagesValides(r) ? r : null;
+  } catch { return null; }
+}
+
+function adopterReglages(s, r) {
+  s.reglages = { sol: r.sol, cailloux: r.cailloux, longueur: r.longueur };
+  s.sol = r.sol;
+  s.cailloux = r.cailloux;
+  s.longueur = r.longueur;
+  try { localStorage.setItem(cleReglages(s.ligne.code), JSON.stringify(s.reglages)); } catch { /* facultatif */ }
+}
+
+function profil(s) {
+  const p = { pseudo: nomJoueur(), avatar: prefs.avatar, cote: s.cote };
+  if (s.cote === 0 && s.reglages) p.reglages = s.reglages;
+  return p;
+}
 
 function appliquerProfil(s, p) {
+  // L'invité attend les réglages de l'hôte avant de lancer la partie.
+  if (s.cote === 1 && p?.cote === 0 && !s.reglages && reglagesValides(p.reglages)) {
+    adopterReglages(s, p.reglages);
+    commencerDuel(s);
+  }
   if (!p || (p.cote !== 0 && p.cote !== 1) || p.cote === s.cote || s.verifie?.[p.cote]) return;
   // Un pseudo annoncé qui ne respecte pas les règles (caractères exotiques, sosie) n'est pas affiché.
   s.noms[p.cote] = pseudoValide(p.pseudo) ? String(p.pseudo).trim() : 'Adversaire';
@@ -343,6 +376,9 @@ async function ouvrirDuel(ligne, uid) {
     noms: cote === 0 ? [nomJoueur(), 'Adversaire'] : ['Adversaire', nomJoueur()],
     avatars: cote === 0 ? [prefs.avatar, '01'] : ['01', prefs.avatar],
   };
+  const gardes = reglagesGardes(ligne.code);
+  if (gardes) adopterReglages(s, gardes);
+  else if (cote === 0) adopterReglages(s, { sol: prefs.sol, cailloux: prefs.cailloux, longueur: prefs.longueur });
   s.reseau = new Reseau(ligne, uid, {
     onCoup: (c) => s.partie?.recevoirCoup(c),
     onSignal: () => s.reconnexion?.resynchroniser(),
@@ -350,12 +386,12 @@ async function ouvrirDuel(ligne, uid) {
     onProfil: (p) => appliquerProfil(s, p),
     onArrivee: (p) => {
       appliquerProfil(s, p);
-      s.reseau.envoyerProfil(profil(cote));
+      s.reseau.envoyerProfil(profil(s));
       if (!s.partie) commencerDuel(s);
     },
     onEtat: (statut) => {
       if (statut === 'SUBSCRIBED') {
-        s.reseau.envoyerProfil(profil(cote));
+        s.reseau.envoyerProfil(profil(s));
       } else if (['CHANNEL_ERROR', 'TIMED_OUT'].includes(statut)) {
         s.reconnexion?.signalerPanne();
       }
@@ -364,11 +400,17 @@ async function ouvrirDuel(ligne, uid) {
   session = s;
   await s.reseau.ouvrir();
   majUrl(ligne.code);
+  // L'invité réclame l'hôte (profil, portrait, réglages) jusqu'à l'avoir reçu : un message émis avant
+  // l'abonnement au canal serait perdu.
+  if (cote === 1 && !s.reglages) {
+    s.sondage = setInterval(() => s.reseau.annoncerArrivee(profil(s)), 2000);
+  }
   return s;
 }
 
 async function commencerDuel(s) {
   if (s.partie || s.demarrage || session !== s) return;
+  if (s.cote === 1 && !s.reglages) return;   // réglages de l'hôte pas encore reçus
   clearInterval(s.sondage);
   // L'identité de l'invité sert à vérifier l'auteur de chaque coup : on la relit au serveur.
   if (!s.ligne.invite) {
@@ -431,7 +473,7 @@ async function rejoindreDuel(code) {
     const ligne = await rejoindre(code);
     fermerSession();
     const s = await ouvrirDuel(ligne, uid);
-    s.reseau.annoncerArrivee(profil(s.cote));
+    s.reseau.annoncerArrivee(profil(s));
     commencerDuel(s);
   } catch (e) {
     err.textContent = messageErreur(e);
