@@ -150,3 +150,4 @@ Deux clients Node exécutent les vrais `reseau.js`, `reconnexion.js`, `partie.js
 - **Précision qui baisse avec la distance** (idée d'un testeur) : la dispersion du lancer est multipliée par `facteurDispersion(p)` = 0,6 + 0,8·p (de 0,6 à 1,4). Le cercle de chute affiché à la visée s'élargit en conséquence (`rayonAtterrissage`, ≈ 12 à 37 unités).
 - Empreinte de référence recalculée : `f0c4eb49`, 0–6 à la mène 4 (identique Node et Chromium). Bot normal : 11 % de boules sorties (limite 12 %).
 - Attention : changement de physique, donc un duel en cours avec un ancien client se désynchroniserait ; recharger les deux côtés.
+- **Cochonnet sur terrain long** : sa fourchette de lancer n'est plus multipliée par tout `k` mais par `1 + 0,6·(k-1)` (très long : 449–612 au lieu de 528–720 sur 806 jouables, soit 56–76 % au lieu de 65–89 %). Terrain normal inchangé, empreinte `f0c4eb49` inchangée.
