@@ -63,9 +63,9 @@ export const JACK_DIST_MAX = 450;
 
 // Puissance réellement appliquée au cochonnet : le geste 0..1 est étalé sur la fourchette autorisée.
 export function puissanceCochonnet(p, sol) {
-  // Sur un terrain plus long, le cochonnet s'éloigne moins vite que le terrain (60 % de l'allongement) :
-  // il reste dans une zone jouable au lieu de finir tout au fond.
-  const echelle = 1 + 0.6 * (TERRAIN.k - 1);
+  // Sur un terrain plus long, le cochonnet ne dépasse pas 67 % de la longueur jouable (jamais moins
+  // loin qu'au terrain normal) : il reste dans une zone jeu au lieu de finir tout au fond.
+  const echelle = TERRAIN.k === 1 ? 1 : Math.max(1, (0.67 * (LANCER.y - TERRAIN.marge)) / JACK_DIST_MAX);
   const d = (JACK_DIST_MIN + normaliserPuissance(p) * (JACK_DIST_MAX - JACK_DIST_MIN)) * echelle;
   return d / portee(sol);
 }

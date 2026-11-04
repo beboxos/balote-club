@@ -134,7 +134,10 @@ for (const l of Object.values(LONGUEURS)) {
   m.preparer(27000, 0.5);
   while (!step(m.etat));
   const dj = LANCER.y - m.etat.objets[0].y;
-  assert.ok(dj > JACK_DIST_MIN * l.k - 40 && dj < JACK_DIST_MAX * l.k + 40, `cochonnet ${l.id} : ${dj}`);
+  // Normal : fourchette d'origine ; plus long : jamais au-delà de 67 % (≈ 70 % avec la tolérance) de la longueur jouable.
+  const jouable = LANCER.y - TERRAIN.marge;
+  assert.ok(dj > JACK_DIST_MIN - 40 && dj < Math.max(JACK_DIST_MAX, 0.67 * jouable) + 40, `cochonnet ${l.id} : ${dj}`);
+  if (l.k > 1) assert.ok(dj < 0.7 * jouable, `cochonnet ${l.id} à ${Math.round((100 * dj) / jouable)} % du terrain`);
   assert.ok(m.etat.objets[0].vivant, `cochonnet sur le terrain (${l.id})`);
 }
 // Sur un terrain plus long, la portée totale augmente de k (le roulage compense le vol borné).
