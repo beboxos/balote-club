@@ -80,6 +80,20 @@ export function fixerLongueur(id) {
 }
 
 const RESTITUTION = 0.92;
+const AMORTI_JACK = 0.5;      // part de vitesse que garde le cochonnet après un choc : il ne file plus au loin
+
+// Dispersion du lancer : un joueur n'est jamais parfaitement précis, et d'autant moins que la boule
+// va loin. Écarts-types : angle en centièmes de degré, puissance en part relative. Le facteur grandit
+// avec la puissance (0,6 à 1,4), donc la zone d'atterrissage s'élargit plus vite que la distance.
+export const DISPERSION_ANGLE = 45;
+export const DISPERSION_PORTEE = 0.022;
+export function facteurDispersion(p) { return 0.6 + 0.8 * normaliserPuissance(p); }
+
+// Rayon (unités du terrain) du cercle où la boule atterrit presque à coup sûr : sert à l'affichage.
+export function rayonAtterrissage(p) {
+  const sigma = PORTEE_AIR * p * DISPERSION_PORTEE * facteurDispersion(p);
+  return RAYON + 1.8 * sigma;
+}
 const MASSE_BOULE = 1;
 const MASSE_JACK = 0.25;
 const MARGE_CAILLOU = 0.6;    // part du rayon de l'objet pour qu'un caillou le touche
@@ -288,6 +302,8 @@ function collisions(etat) {
     a.vy -= (jImp / a.m) * ny;
     b.vx += (jImp / b.m) * nx;
     b.vy += (jImp / b.m) * ny;
+    if (a.jack) { a.vx *= AMORTI_JACK; a.vy *= AMORTI_JACK; }
+    if (b.jack) { b.vx *= AMORTI_JACK; b.vy *= AMORTI_JACK; }
     etat.chocs.push({
       x: a.x + nx * a.r, y: a.y + ny * a.r,
       force: -vn, jack: a.jack || b.jack,

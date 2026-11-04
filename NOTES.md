@@ -60,7 +60,7 @@ La référence de `tests/determinisme.html` change avec la nouvelle physique : v
 - **Cailloux** : semés à chaque mène depuis la graine (`semerCailloux`) : 0 sur lisse, 5 sur terre, 12 sur gravier. Un objet qui roule sur un caillou est dévié de 3 à 9° du côté opposé, freiné de 5 %, une seule fois par caillou et par déplacement. Même résultat sur les deux appareils (arithmétique simple, masque de bits dans `o.cai`).
 - **Cochonnet** : le premier joueur de chaque mène le lance (c'est un coup du journal, `phase === 'cochonnet'`), puis lance aussi la première boule. Le geste 0..1 est étalé sur 330 à 450 unités : ni trop près, ni trop loin, l'angle restant libre. Sorti du terrain, il est relancé, et posé d'office après deux lancers nuls.
 - **Taille du cochonnet** : rendu réduit de 30 % (facteur 2,2 → 1,54). Le rayon physique ne change pas.
-- Le portée n'est plus une constante : `portee(sol)`. Empreinte de référence recalculée : `b2d3e572`, 1–5 à la mène 5.
+- Le portée n'est plus une constante : `portee(sol)`. Empreinte de référence recalculée : `f0c4eb49`, 0–6 à la mène 4 (dispersion croissante et cochonnet amorti).
 - Non vérifié : ressenti réel du roulement et des cailloux au toucher, équilibrage du bot sur les nouveaux sols, duel entre deux navigateurs avec le lancer du cochonnet.
 
 ### Ajustements suivants
@@ -144,3 +144,9 @@ Deux clients Node exécutent les vrais `reseau.js`, `reconnexion.js`, `partie.js
 - L'invité n'ouvre la partie qu'une fois les réglages de l'hôte reçus et les réclame toutes les 2 s tant qu'il ne les a pas (un message émis avant l'abonnement au canal est perdu) ; même mécanisme pour son portrait et celui de l'hôte.
 - Vérifié sur deux origines (localhost / 127.0.0.1) : l'invité en réglages normaux reçoit gravier, 60 %, très long (terrain 920, k 1,6) ; pseudos et portraits corrects des deux côtés.
 - Revue de sécurité du n° 11 : validation des réglages par `Object.hasOwn` (pas de clés de prototype). Limite assumée : les réglages voyagent sur le canal broadcast public (comme le profil) ; seul un tiers connaissant l'uuid de la partie pourrait les falsifier, au pire pour désynchroniser ce duel. Piste propre : colonne `reglages` dans `parties` écrite par l'hôte à la création (migration SQL).
+
+## Retour de jeu n° 12 — cochonnet amorti, précision décroissante
+- **Cochonnet percuté** : il garde 50 % de sa vitesse après un choc (`AMORTI_JACK`), au lieu de filer au loin ; son lancer n'est pas touché.
+- **Précision qui baisse avec la distance** (idée d'un testeur) : la dispersion du lancer est multipliée par `facteurDispersion(p)` = 0,6 + 0,8·p (de 0,6 à 1,4). Le cercle de chute affiché à la visée s'élargit en conséquence (`rayonAtterrissage`, ≈ 12 à 37 unités).
+- Empreinte de référence recalculée : `f0c4eb49`, 0–6 à la mène 4 (identique Node et Chromium). Bot normal : 11 % de boules sorties (limite 12 %).
+- Attention : changement de physique, donc un duel en cours avec un ancien client se désynchroniserait ; recharger les deux côtés.

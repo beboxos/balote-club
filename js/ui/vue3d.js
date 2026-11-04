@@ -413,7 +413,7 @@ export function cochonnet(ctx, px, py, rayon, tempsMs, calme) {
 
 // Courbe du lancer jusqu'au point de chute (les rebonds et le roulement ne sont pas montrés).
 // points : [{ x, y, h }] le long de la trajectoire, du lâcher à l'impact.
-export function trajectoire(ctx, cam, points, tempsMs) {
+export function trajectoire(ctx, cam, points, tempsMs, rayon = RAYON * 1.9) {
   const sol = points.map((p) => cam.projeter(p.x, p.y, 0));
   const air = points.map((p) => cam.projeter(p.x, p.y, p.h));
   const fin = points[points.length - 1];
@@ -441,7 +441,7 @@ export function trajectoire(ctx, cam, points, tempsMs) {
   ctx.lineDashOffset = 0;
   ctx.restore();
   // Point de chute
-  anneauSol(ctx, cam, fin.x, fin.y, RAYON * 1.9, 'rgba(255,150,95,.98)', Math.max(2.4, k * 2.4));
+  anneauSol(ctx, cam, fin.x, fin.y, rayon, 'rgba(255,150,95,.98)', Math.max(2.4, k * 2.4));
   anneauSol(ctx, cam, fin.x, fin.y, RAYON * 0.55, 'rgba(255,150,95,.85)', Math.max(2, k * 2));
 }
 

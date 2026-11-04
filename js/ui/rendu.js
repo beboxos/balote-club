@@ -1,4 +1,4 @@
-import { TERRAIN, LANCER, RAYON, PORTEE_AIR, sinCos, distance, puissanceCochonnet } from '../core/physique.js';
+import { TERRAIN, LANCER, RAYON, PORTEE_AIR, sinCos, distance, puissanceCochonnet, rayonAtterrissage } from '../core/physique.js';
 import { meilleures } from '../core/partie.js';
 import { dessinerTerrain, spriteBoule, Effets, viderCaches, HALO } from './matieres.js';
 import { Camera, peindreDecor, ombreSol, haloSol, anneauSol, cochonnet, trajectoire, jauge, GROSSISSEMENT } from './vue3d.js';
@@ -431,7 +431,7 @@ export class Rendu {
 
     if (this.visee && this.peutViser()) {
       jauge(ctx, cam, LANCER.x, LANCER.y, this.visee.p);
-      trajectoire(ctx, cam, this.courbe(this.visee.cd, this.visee.p), t);
+      trajectoire(ctx, cam, this.courbe(this.visee.cd, this.visee.p), t, this.rayonVisee());
     }
 
     // Joueurs : celui qui lance au cercle, l'autre à côté ; ils glissent de l'un à l'autre.
@@ -474,6 +474,13 @@ export class Rendu {
     }
 
     this.effets.dessinerParticules(ctx, cam);
+  }
+
+  // Cercle d'atterrissage : plus on tire loin, plus il est large (le lancer est moins précis).
+  rayonVisee() {
+    const m = this.partie.moteur;
+    const g = this.visee.p;
+    return rayonAtterrissage(m.phase === 'cochonnet' ? puissanceCochonnet(g, m.sol) : g);
   }
 
   // Trajectoire prévue (sans la dispersion du lancer) : de la main au point de chute.

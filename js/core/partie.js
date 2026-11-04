@@ -2,6 +2,7 @@ import {
   creerEtat, ajouterBoule, lancer, step, distance,
   normaliserAngle, normaliserPuissance, puissanceCochonnet, PAS, LANCER, TERRAIN, SOLS, SOL_DEFAUT,
   CAILLOUX_DEFAUT, LONGUEUR_DEFAUT, nombreCailloux, fixerLongueur,
+  DISPERSION_ANGLE, DISPERSION_PORTEE, facteurDispersion,
 } from './physique.js';
 import { deriver, mulberry32 } from './rng.js';
 
@@ -12,15 +13,13 @@ export const BUTS_CHOIX = [5, 13];
 export const BOULES_DEFAUT = 3;
 export const BOULES_CHOIX = [3, 6];
 
-// Dispersion du lancer : un joueur n'est jamais parfaitement précis. Les deux appareils la
-// tirent de la même graine et du même numéro de lancer (arithmétique entière seulement).
-const DISPERSION_ANGLE = 45;      // écart-type, centièmes de degré
-const DISPERSION_PORTEE = 0.022;  // écart-type relatif sur la puissance
-
-function bruit(graine, n) {
+// Dispersion du lancer (voir physique.js) : les deux appareils la tirent de la même graine et du
+// même numéro de lancer ; elle grandit avec la puissance réellement appliquée.
+function bruit(graine, n, p) {
   const rng = mulberry32(deriver(graine, 900000 + n));
   const tirer = () => Math.max(-2.5, Math.min(2.5, (rng() + rng() + rng() + rng() - 2) * 1.7320508));
-  return { angle: tirer() * DISPERSION_ANGLE, puissance: tirer() * DISPERSION_PORTEE };
+  const f = facteurDispersion(p);
+  return { angle: tirer() * DISPERSION_ANGLE * f, puissance: tirer() * DISPERSION_PORTEE * f };
 }
 
 // Le premier joueur de la mène lance le cochonnet. Après ce nombre de lancers nuls (sorti du
@@ -118,14 +117,15 @@ export class Moteur {
     const e = this.tour;
     if (this.phase === 'cochonnet') {
       this.dernier = e;
-      const b = bruit(this.graine, this.lancers++);
-      lancer(this.etat, 0, angle + b.angle, puissanceCochonnet(puissance, this.sol) * (1 + b.puissance));
+      const pe = puissanceCochonnet(puissance, this.sol);
+      const b = bruit(this.graine, this.lancers++, pe);
+      lancer(this.etat, 0, angle + b.angle, pe * (1 + b.puissance));
       return 0;
     }
     const i = ajouterBoule(this.etat, e);
     this.jouees[e]++;
     this.dernier = e;
-    const b = bruit(this.graine, this.lancers++);
+    const b = bruit(this.graine, this.lancers++, puissance);
     lancer(this.etat, i, angle + b.angle, puissance * (1 + b.puissance));
     return i;
   }
