@@ -19,9 +19,9 @@ export const PORTEE_AIR = V_LANCER * T_VOL;
 // Surfaces de jeu, de la plus roulante à la plus freinante. frottement : décélération de roulement
 // (unités/s²) ; impact : part de la vitesse conservée à l'atterrissage.
 export const SOLS = {
-  lisse: { id: 'lisse', nom: 'Lisse', frottement: 200, impact: 0.5 },
+  lisse: { id: 'lisse', nom: 'Lisse', frottement: 170, impact: 0.5 },
   terre: { id: 'terre', nom: 'Terre', frottement: 260, impact: 0.5 },
-  gravier: { id: 'gravier', nom: 'Gravier', frottement: 380, impact: 0.45 },
+  gravier: { id: 'gravier', nom: 'Gravier', frottement: 380, impact: 0.35 },
 };
 export const SOL_DEFAUT = 'terre';
 

@@ -1,4 +1,4 @@
-import { AVATARS, STOCKAGE } from './config.js';
+import { AVATARS, STOCKAGE, VERSION } from './config.js';
 import { pseudoValide, avatarValide, MDP_MIN } from './core/profil.js';
 import { Partie, BOULES_DEFAUT, BOULES_CHOIX, BUT, BUTS_CHOIX } from './core/partie.js';
 import { SOLS, SOL_DEFAUT, LONGUEURS, LONGUEUR_DEFAUT, CAILLOUX_DEFAUT } from './core/physique.js';
@@ -16,6 +16,7 @@ import {
 import { Reconnexion } from './net/reconnexion.js';
 
 const $ = (id) => document.getElementById(id);
+$('version').textContent = 'v' + VERSION;
 
 function lire(cle, defaut) { try { return localStorage.getItem(cle) ?? defaut; } catch { return defaut; } }
 function ecrire(cle, v) { try { localStorage.setItem(cle, v); } catch { /* stockage indisponible */ } }

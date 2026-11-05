@@ -5,5 +5,8 @@ export const SUPABASE_ANON_KEY = 'sb_publishable_0EJZem-TiB4ltXxpQbeZRQ_JAaOjGb9
 
 export const SUPABASE_JS = 'https://esm.sh/@supabase/supabase-js@2.45.4';
 
+// Version affichée dans le menu : à incrémenter à chaque publication.
+export const VERSION = '1.32';
+
 export const AVATARS = ['01', '02', '03', '04', '05', '06'];
 export const STOCKAGE = { son: 'balote.son', pseudo: 'balote.pseudo', avatar: 'balote.avatar', niveau: 'balote.niveau', boules: 'balote.boules', sol: 'balote.sol', but: 'balote.but', cailloux: 'balote.cailloux', longueur: 'balote.longueur', musique: 'balote.musique', piste: 'balote.piste' };
