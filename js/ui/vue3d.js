@@ -414,8 +414,10 @@ export function cochonnet(ctx, px, py, rayon, tempsMs, calme) {
 // Courbe du lancer jusqu'au point de chute (les rebonds et le roulement ne sont pas montrés).
 // points : [{ x, y, h }] le long de la trajectoire, du lâcher à l'impact.
 export function trajectoire(ctx, cam, points, tempsMs, rayon = RAYON * 1.9) {
-  const sol = points.map((p) => cam.projeter(p.x, p.y, 0));
-  const air = points.map((p) => cam.projeter(p.x, p.y, p.h));
+  // Les pointillés s'arrêtent avant le point de chute : seul le grand cercle indique la zone d'impact.
+  const tracees = points.slice(0, Math.max(2, Math.floor(points.length * 0.8)));
+  const sol = tracees.map((p) => cam.projeter(p.x, p.y, 0));
+  const air = tracees.map((p) => cam.projeter(p.x, p.y, p.h));
   const fin = points[points.length - 1];
   const k = cam.projeter(fin.x, fin.y, 0).k;
   ctx.save();
@@ -442,7 +444,6 @@ export function trajectoire(ctx, cam, points, tempsMs, rayon = RAYON * 1.9) {
   ctx.restore();
   // Point de chute
   anneauSol(ctx, cam, fin.x, fin.y, rayon, 'rgba(255,150,95,.98)', Math.max(2.4, k * 2.4));
-  anneauSol(ctx, cam, fin.x, fin.y, RAYON * 0.55, 'rgba(255,150,95,.85)', Math.max(2, k * 2));
 }
 
 // Jauge de force : anneau autour du cercle de lancer qui se remplit.
