@@ -25,8 +25,8 @@ export const SOLS = {
 };
 export const SOL_DEFAUT = 'terre';
 
-// Petits cailloux semés à chaque mène, réglés en pourcentage de CAILLOUX_MAX (30 % = 7 cailloux).
-export const CAILLOUX_MAX = 24;
+// Petits cailloux semés à chaque mène, réglés en pourcentage de CAILLOUX_MAX (30 % = 22 cailloux).
+export const CAILLOUX_MAX = 72;
 export const CAILLOUX_DEFAUT = 30;
 export function nombreCailloux(pourcent) {
   return Math.round((Math.min(100, Math.max(0, pourcent)) * CAILLOUX_MAX) / 100);
@@ -157,7 +157,7 @@ export function creerEtat(jack, sol = SOLS[SOL_DEFAUT], cailloux = []) {
     objets: [{
       x: jack.x, y: jack.y, vx: 0, vy: 0,
       r: JACK_R, m: MASSE_JACK, vivant: true, equipe: -1, jack: true,
-      air: 0, air0: 0, arc: 0, cai: 0, enMain: false,
+      air: 0, air0: 0, arc: 0, cai: [0, 0, 0], enMain: false,
     }],
     sol,
     cailloux,
@@ -171,7 +171,7 @@ export function ajouterBoule(etat, equipe) {
     x: LANCER.x, y: LANCER.y, vx: 0, vy: 0,
     r: RAYON, m: MASSE_BOULE, vivant: true, equipe, jack: false,
     air: 0, air0: 0, arc: 0,   // pas de vol restants, pas de vol au départ, hauteur du sommet
-    cai: 0, enMain: false,     // cailloux déjà touchés (masque de bits), tenu en main avant le lancer
+    cai: [0, 0, 0], enMain: false, // cailloux déjà touchés (masque de bits, 32 par mot), tenu en main avant le lancer
   });
   return etat.objets.length - 1;
 }
@@ -187,7 +187,7 @@ export function lancer(etat, boule, angle, puissance) {
   o.air0 = Math.max(1, Math.round((T_VOL * racine) / PAS));
   o.air = o.air0;
   o.arc = 20 + 120 * racine;
-  o.cai = 0;
+  o.cai.fill(0);
   o.enMain = false;
   etat.pas = 0;
 }
@@ -202,14 +202,15 @@ function horsTerrain(o) {
 function cailloux(etat, o) {
   const cs = etat.cailloux;
   for (let k = 0; k < cs.length; k++) {
-    const bit = 1 << k;
-    if (o.cai & bit) continue;
+    const mot = k >> 5;
+    const bit = 1 << (k & 31);
+    if (o.cai[mot] & bit) continue;
     const c = cs[k];
     const dx = c.x - o.x;
     const dy = c.y - o.y;
     const lim = c.r + o.r * MARGE_CAILLOU;
     if (dx * dx + dy * dy >= lim * lim) continue;
-    o.cai |= bit;
+    o.cai[mot] |= bit;
     const d = o.vx * dy - o.vy * dx > 0 ? -c.d : c.d;
     const vx = o.vx - d * o.vy;
     const vy = o.vy + d * o.vx;
@@ -226,7 +227,7 @@ function integrer(etat) {
   for (let i = 0; i < objets.length; i++) {
     const o = objets[i];
     if (!o.vivant) continue;
-    if (o.vx === 0 && o.vy === 0) { o.cai = 0; continue; }
+    if (o.vx === 0 && o.vy === 0) { o.cai.fill(0); continue; }
     if (o.air > 0) {
       // En vol : trajectoire droite sans frottement, ni choc ; à l'impact la vitesse chute.
       o.x += o.vx * PAS;

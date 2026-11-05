@@ -123,13 +123,13 @@ console.log('OK');
 
 // Réglages : pourcentage de cailloux et longueur du terrain.
 assert.equal(nombreCailloux(0), 0);
-assert.equal(nombreCailloux(30), 7);
-assert.equal(nombreCailloux(100), 24);
+assert.equal(nombreCailloux(30), 22);
+assert.equal(nombreCailloux(100), 72);
 for (const l of Object.values(LONGUEURS)) {
   const m = new Moteur(5, 3, 'terre', 5, { cailloux: 30, longueur: l.id });
   assert.equal(TERRAIN.h, l.h);
   assert.equal(LANCER.y, l.h - 74);
-  assert.equal(m.etat.cailloux.length, 7);
+  assert.equal(m.etat.cailloux.length, 22);
   for (const c of m.etat.cailloux) assert.ok(c.y >= 95 && c.y < l.h - 165, `caillou dans la piste (${l.id})`);
   m.preparer(27000, 0.5);
   while (!step(m.etat));
